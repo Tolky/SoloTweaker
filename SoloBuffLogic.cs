@@ -532,5 +532,26 @@ namespace SoloTweaker
             _optOutUsers.Remove(userEntity);
         }
 
+        internal static void ClearAllBuffs()
+        {
+            var serverWorld = GetServerWorld();
+            if (serverWorld == null || !serverWorld.IsCreated)
+                return;
+
+            var em = serverWorld.EntityManager;
+
+            // Get all buffed characters and clear them
+            var buffedChars = new System.Collections.Generic.List<Entity>(_buffedCharacters);
+            foreach (var character in buffedChars)
+            {
+                if (em.Exists(character))
+                {
+                    SoloStatBoostService.Clear(em, character);
+                }
+            }
+
+            _buffedCharacters.Clear();
+        }
+
     }
 }

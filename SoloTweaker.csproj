@@ -7,6 +7,7 @@
     <AssemblyName>SoloTweaker</AssemblyName>
     <RootNamespace>SoloTweaker</RootNamespace>
 
+    <!-- Adjust these if your server lives elsewhere -->
     <GameDir>C:\Program Files (x86)\Steam\steamapps\common\VRisingDedicatedServer</GameDir>
     <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
 
@@ -87,7 +88,9 @@
     <Reference Include="VampireCommandFramework">
       <HintPath>$(PluginsDir)\VampireCommandFramework.dll</HintPath>
     </Reference>
+  </ItemGroup>
 
+  <!-- Copy built DLL into BepInEx\plugins\SoloTweaker -->
   <Target Name="CopyToBepInEx" AfterTargets="Build" Condition="Exists('$(PluginsDir)')">
     <MakeDir Directories="$(PluginsDir)\$(AssemblyName)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(PluginsDir)\$(AssemblyName)\$(AssemblyName).dll" />

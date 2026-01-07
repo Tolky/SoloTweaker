@@ -89,14 +89,14 @@ namespace SoloTweaker
             SoloHealthPercent = Config.Bind<float>(
                 "Solo Buffs",
                 "HealthPercent",
-                0f,
+                0.10f,
                 "Max health bonus when solo (0.10 = +10% max HP). 0 = no health buff."
             );
 
             SoloMoveSpeedPercent = Config.Bind<float>(
                 "Solo Buffs",
                 "MoveSpeedPercent",
-                0f,
+                0.10f,
                 "Move speed bonus when solo (0.10 = +10% move speed). 0 = no move speed buff."
             );
 
@@ -145,6 +145,9 @@ namespace SoloTweaker
             Instance.Config.Reload();
             Instance.Config.Save();
             Instance.Log.LogInfo("[SoloTweaker] Config reloaded from disk.");
+
+            // Clear all existing buffs so they can be reapplied with new config values
+            SoloBuffLogic.ClearAllBuffs();
         }
     }
 }

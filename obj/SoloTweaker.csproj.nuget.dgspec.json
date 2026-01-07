@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\SoloTweaker\\SoloTweaker.csproj": {}
+    "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\SoloTweaker.csproj": {}
   },
   "projects": {
-    "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\SoloTweaker\\SoloTweaker.csproj": {
+    "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\SoloTweaker.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\SoloTweaker\\SoloTweaker.csproj",
+        "projectUniqueName": "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\SoloTweaker.csproj",
         "projectName": "SoloTweaker",
-        "projectPath": "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\SoloTweaker\\SoloTweaker.csproj",
+        "projectPath": "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\SoloTweaker.csproj",
         "packagesPath": "C:\\Users\\ajayk\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\SoloTweaker\\obj\\",
+        "outputPath": "C:\\Users\\ajayk\\Desktop\\SoloTweaker\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\ajayk\\AppData\\Roaming\\NuGet\\NuGet.Config"
