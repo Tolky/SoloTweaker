@@ -28,6 +28,8 @@ namespace SoloTweaker
             public float SpellDamageMul;      // 1 = no change
             public float HealthMul;           // 1 = no change (1.10 = +10%)
             public float MoveSpeedMul;        // 1 = no change (1.10 = +10%)
+            public float CritChanceMul;       // 1 = no change (1.10 = +10%)
+            public float CritDamageMul;       // 1 = no change (1.10 = +10%)
 
             // Store original values for exact revert (prevents compounding errors)
             public float BaseAbilityAttackSpeed;
@@ -37,13 +39,15 @@ namespace SoloTweaker
             public float BaseMoveSpeed;
             public float BasePhysicalPower;      // Store unbuffed physical power
             public float BaseSpellPower;         // Store unbuffed spell power
+            public float BasePhysicalCritChance; // Store unbuffed physical crit chance
+            public float BasePhysicalCritDamage; // Store unbuffed physical crit damage
         }
 
         private static readonly Dictionary<Entity, StatState> _states = new();
 
         /// <summary>
         /// Apply solo buffs for this character.
-        /// attackSpeedBonus / physicalDamageBonus / spellDamageBonus / healthBonusPercent / moveSpeedBonusPercent:
+        /// attackSpeedBonus / physicalDamageBonus / spellDamageBonus / healthBonusPercent / moveSpeedBonusPercent / critChanceBonus / critDamageBonus:
         ///   0.10f = +10%.
         /// </summary>
         public static void ApplyBuffs(
@@ -53,7 +57,9 @@ namespace SoloTweaker
             float physicalDamageBonus,
             float spellDamageBonus,
             float healthBonusPercent,
-            float moveSpeedBonusPercent)
+            float moveSpeedBonusPercent,
+            float critChanceBonus,
+            float critDamageBonus)
         {
             if (!em.Exists(character))
                 return;
@@ -106,6 +112,8 @@ namespace SoloTweaker
             float spellDamageMul = Math.Abs(spellDamageBonus)      > 0.0001f ? 1f + spellDamageBonus      : 1f;
             float healthMul      = Math.Abs(healthBonusPercent)    > 0.0001f ? 1f + healthBonusPercent    : 1f;
             float moveSpeedMul   = Math.Abs(moveSpeedBonusPercent) > 0.0001f ? 1f + moveSpeedBonusPercent : 1f;
+            float critChanceMul  = Math.Abs(critChanceBonus)       > 0.0001f ? 1f + critChanceBonus       : 1f;
+            float critDamageMul  = Math.Abs(critDamageBonus)       > 0.0001f ? 1f + critDamageBonus       : 1f;
 
             // Clamp to sane values so things don't go completely nuclear
             if (attackSpeedMul < 0.1f) attackSpeedMul = 0.1f;
@@ -123,10 +131,17 @@ namespace SoloTweaker
             if (moveSpeedMul < 0.1f) moveSpeedMul = 0.1f;
             if (moveSpeedMul > 3f)   moveSpeedMul = 3f;
 
+            if (critChanceMul < 0.1f) critChanceMul = 0.1f;
+            if (critChanceMul > 5f)   critChanceMul = 5f;
+
+            if (critDamageMul < 0.1f) critDamageMul = 0.1f;
+            if (critDamageMul > 10f)  critDamageMul = 10f;
+
             bool physChanged   = false;
             bool spellChanged  = false;
             bool healthChanged = false;
             bool moveChanged   = false;
+            bool critChanged   = false;
 
             // Track original values for exact revert
             float baseAbilityAttackSpeed = 0f;
@@ -136,6 +151,8 @@ namespace SoloTweaker
             float baseMoveSpeed = 0f;
             float basePhysicalPower = 0f;
             float baseSpellPower = 0f;
+            float basePhysicalCritChance = 0f;
+            float basePhysicalCritDamage = 0f;
 
             // ---- Attack speed ----
             if (attackSpeedMul != 1f)
@@ -268,12 +285,37 @@ namespace SoloTweaker
                 spellChanged = true;
             }
 
+            // ---- Physical Crit Chance and Damage ----
+            if ((critChanceMul != 1f || critDamageMul != 1f) && em.HasComponent<VampireSpecificAttributes>(character))
+            {
+                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
+
+                if (critChanceMul != 1f)
+                {
+                    // Store original value before modifying
+                    basePhysicalCritChance = attrs.PhysicalCriticalStrikeChance._Value;
+                    attrs.PhysicalCriticalStrikeChance._Value *= critChanceMul;
+                    critChanged = true;
+                }
+
+                if (critDamageMul != 1f)
+                {
+                    // Store original value before modifying
+                    basePhysicalCritDamage = attrs.PhysicalCriticalStrikeDamage._Value;
+                    attrs.PhysicalCriticalStrikeDamage._Value *= critDamageMul;
+                    critChanged = true;
+                }
+
+                em.SetComponentData(character, attrs);
+            }
+
             // If literally nothing changed, don't store state
             if (attackSpeedMul == 1f &&
                 !physChanged &&
                 !spellChanged &&
                 !healthChanged &&
-                !moveChanged)
+                !moveChanged &&
+                !critChanged)
             {
                 return;
             }
@@ -285,13 +327,17 @@ namespace SoloTweaker
                 SpellDamageMul         = spellDamageMul,
                 HealthMul              = healthMul,
                 MoveSpeedMul           = moveSpeedMul,
+                CritChanceMul          = critChanceMul,
+                CritDamageMul          = critDamageMul,
                 BaseAbilityAttackSpeed = baseAbilityAttackSpeed,
                 BasePrimaryAttackSpeed = basePrimaryAttackSpeed,
                 BaseAbilityCastSpeed   = baseAbilityCastSpeed,
                 BaseMaxHealth          = baseMaxHealth,
                 BaseMoveSpeed          = baseMoveSpeed,
                 BasePhysicalPower      = basePhysicalPower,
-                BaseSpellPower         = baseSpellPower
+                BaseSpellPower         = baseSpellPower,
+                BasePhysicalCritChance = basePhysicalCritChance,
+                BasePhysicalCritDamage = basePhysicalCritDamage
             };
         }
 
@@ -409,6 +455,20 @@ namespace SoloTweaker
 
                 em.SetComponentData(character, move);
             }
+
+            // Undo physical crit buffs - restore exact original values
+            if ((state.CritChanceMul != 1f || state.CritDamageMul != 1f) && em.HasComponent<VampireSpecificAttributes>(character))
+            {
+                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
+
+                if (state.CritChanceMul != 1f)
+                    attrs.PhysicalCriticalStrikeChance._Value = state.BasePhysicalCritChance;
+
+                if (state.CritDamageMul != 1f)
+                    attrs.PhysicalCriticalStrikeDamage._Value = state.BasePhysicalCritDamage;
+
+                em.SetComponentData(character, attrs);
+            }
         }
 
         /// <summary>
@@ -422,7 +482,8 @@ namespace SoloTweaker
             bool clearPhysicalDamage,
             bool clearSpellDamage,
             bool clearHealth,
-            bool clearMoveSpeed)
+            bool clearMoveSpeed,
+            bool clearCrit = true)
         {
             if (!_states.TryGetValue(character, out var state))
                 return;
@@ -431,7 +492,7 @@ namespace SoloTweaker
                 return;
 
             // Only remove from state tracking if we're clearing everything
-            bool clearingEverything = clearAttackSpeed && clearPhysicalDamage && clearSpellDamage && clearHealth && clearMoveSpeed;
+            bool clearingEverything = clearAttackSpeed && clearPhysicalDamage && clearSpellDamage && clearHealth && clearMoveSpeed && clearCrit;
             if (clearingEverything)
             {
                 _states.Remove(character);
@@ -537,13 +598,27 @@ namespace SoloTweaker
 
                 em.SetComponentData(character, move);
             }
+
+            // Undo physical crit buffs - restore exact original values
+            if (clearCrit && (state.CritChanceMul != 1f || state.CritDamageMul != 1f) && em.HasComponent<VampireSpecificAttributes>(character))
+            {
+                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
+
+                if (state.CritChanceMul != 1f)
+                    attrs.PhysicalCriticalStrikeChance._Value = state.BasePhysicalCritChance;
+
+                if (state.CritDamageMul != 1f)
+                    attrs.PhysicalCriticalStrikeDamage._Value = state.BasePhysicalCritDamage;
+
+                em.SetComponentData(character, attrs);
+            }
         }
 
         // --- Convenience helpers / back-compat ---
 
         public static void ApplyAttackSpeedBuff(EntityManager em, Entity character, float bonus)
         {
-            ApplyBuffs(em, character, bonus, 0f, 0f, 0f, 0f);
+            ApplyBuffs(em, character, bonus, 0f, 0f, 0f, 0f, 0f, 0f);
         }
 
         public static void ClearAttackSpeedBuff(EntityManager em, Entity character)

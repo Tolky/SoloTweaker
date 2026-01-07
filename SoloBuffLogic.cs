@@ -15,6 +15,8 @@ namespace SoloTweaker
         private static float SpellDamageBonus    => Plugin.SoloSpellDamagePercent.Value;
         private static float HealthPercentBonus  => Plugin.SoloHealthPercent.Value;
         private static float MoveSpeedPercent    => Plugin.SoloMoveSpeedPercent.Value;
+        private static float CritChanceBonus     => Plugin.SoloCritChancePercent.Value;
+        private static float CritDamageBonus     => Plugin.SoloCritDamagePercent.Value;
         private static float YieldMultiplier     => Plugin.SoloYieldMultiplier.Value;
         private static bool  NoCooldown          => Plugin.SoloNoCooldown.Value;
         private static bool  SunInvuln           => Plugin.SoloSunInvulnerable.Value;
@@ -130,7 +132,9 @@ namespace SoloTweaker
                     PhysicalDamageBonus,   // 0.10 = +10% physical damage
                     SpellDamageBonus,      // 0.10 = +10% spell damage
                     HealthPercentBonus,    // 0.10 = +10% max HP
-                    MoveSpeedPercent       // 0.10 = +10% move speed
+                    MoveSpeedPercent,      // 0.10 = +10% move speed
+                    CritChanceBonus,       // 0.10 = +10% crit chance
+                    CritDamageBonus        // 0.10 = +10% crit damage
                 );
 
                 _buffedCharacters.Add(character);

@@ -32,6 +32,8 @@ namespace SoloTweaker
         internal static ConfigEntry<bool>  SoloSunInvulnerable    = null!;
         internal static ConfigEntry<int>   SoloClanOfflineThresholdMinutes = null!;
         internal static ConfigEntry<float> SoloSpellDamagePercent;
+        internal static ConfigEntry<float> SoloCritChancePercent;
+        internal static ConfigEntry<float> SoloCritDamagePercent;
 
 
         public override void Load()
@@ -135,6 +137,20 @@ namespace SoloTweaker
                 "ClanOfflineThresholdMinutes",
                 30,
                 "Minutes other clan members must have been offline before you are treated as solo while in a clan. 0 = no delay.");
+
+            SoloCritChancePercent = Config.Bind<float>(
+                "Solo Buffs",
+                "CritChancePercent",
+                0.10f,
+                "Physical crit chance bonus when solo (0.10 = +10% crit chance). 0 = no crit chance buff."
+            );
+
+            SoloCritDamagePercent = Config.Bind<float>(
+                "Solo Buffs",
+                "CritDamagePercent",
+                0.10f,
+                "Physical crit damage bonus when solo (0.10 = +10% crit damage). 0 = no crit damage buff."
+            );
         }
 
         internal static void ReloadConfig()
