@@ -30,6 +30,9 @@ namespace SoloTweaker
             public float MoveSpeedMul;        // 1 = no change (1.10 = +10%)
             public float CritChanceMul;       // 1 = no change (1.10 = +10%)
             public float CritDamageMul;       // 1 = no change (1.10 = +10%)
+            public float PhysicalLeechMul;    // 1 = no change (1.10 = +10%)
+            public float SpellLeechMul;       // 1 = no change (1.10 = +10%)
+            public float ResourceYieldMul;    // 1 = no change (1.10 = +10%)
 
             // Store original values for exact revert (prevents compounding errors)
             public float BaseAbilityAttackSpeed;
@@ -41,14 +44,17 @@ namespace SoloTweaker
             public float BaseSpellPower;         // Store unbuffed spell power
             public float BasePhysicalCritChance; // Store unbuffed physical crit chance
             public float BasePhysicalCritDamage; // Store unbuffed physical crit damage
+            public float BasePhysicalLifeLeech;  // Store unbuffed physical leech
+            public float BasePrimaryLeech;       // Store unbuffed primary/basic attack leech
+            public float BaseSpellLifeLeech;     // Store unbuffed spell leech
+            public float BaseResourceYield;      // Store unbuffed resource yield
         }
 
         private static readonly Dictionary<Entity, StatState> _states = new();
 
         /// <summary>
         /// Apply solo buffs for this character.
-        /// attackSpeedBonus / physicalDamageBonus / spellDamageBonus / healthBonusPercent / moveSpeedBonusPercent / critChanceBonus / critDamageBonus:
-        ///   0.10f = +10%.
+        /// All bonus parameters: 0.10f = +10%.
         /// </summary>
         public static void ApplyBuffs(
             EntityManager em,
@@ -59,7 +65,10 @@ namespace SoloTweaker
             float healthBonusPercent,
             float moveSpeedBonusPercent,
             float critChanceBonus,
-            float critDamageBonus)
+            float critDamageBonus,
+            float physicalLeechBonus,
+            float spellLeechBonus,
+            float resourceYieldBonus)
         {
             if (!em.Exists(character))
                 return;
@@ -107,13 +116,16 @@ namespace SoloTweaker
             }
 
             // Convert to multipliers
-            float attackSpeedMul = Math.Abs(attackSpeedBonus)      > 0.0001f ? 1f + attackSpeedBonus      : 1f;
-            float physDamageMul  = Math.Abs(physicalDamageBonus)   > 0.0001f ? 1f + physicalDamageBonus   : 1f;
-            float spellDamageMul = Math.Abs(spellDamageBonus)      > 0.0001f ? 1f + spellDamageBonus      : 1f;
-            float healthMul      = Math.Abs(healthBonusPercent)    > 0.0001f ? 1f + healthBonusPercent    : 1f;
-            float moveSpeedMul   = Math.Abs(moveSpeedBonusPercent) > 0.0001f ? 1f + moveSpeedBonusPercent : 1f;
-            float critChanceMul  = Math.Abs(critChanceBonus)       > 0.0001f ? 1f + critChanceBonus       : 1f;
-            float critDamageMul  = Math.Abs(critDamageBonus)       > 0.0001f ? 1f + critDamageBonus       : 1f;
+            float attackSpeedMul   = Math.Abs(attackSpeedBonus)      > 0.0001f ? 1f + attackSpeedBonus      : 1f;
+            float physDamageMul    = Math.Abs(physicalDamageBonus)   > 0.0001f ? 1f + physicalDamageBonus   : 1f;
+            float spellDamageMul   = Math.Abs(spellDamageBonus)      > 0.0001f ? 1f + spellDamageBonus      : 1f;
+            float healthMul        = Math.Abs(healthBonusPercent)    > 0.0001f ? 1f + healthBonusPercent    : 1f;
+            float moveSpeedMul     = Math.Abs(moveSpeedBonusPercent) > 0.0001f ? 1f + moveSpeedBonusPercent : 1f;
+            float critChanceMul    = Math.Abs(critChanceBonus)       > 0.0001f ? 1f + critChanceBonus       : 1f;
+            float critDamageMul    = Math.Abs(critDamageBonus)       > 0.0001f ? 1f + critDamageBonus       : 1f;
+            float physLeechMul     = Math.Abs(physicalLeechBonus)    > 0.0001f ? 1f + physicalLeechBonus    : 1f;
+            float spellLeechMul    = Math.Abs(spellLeechBonus)       > 0.0001f ? 1f + spellLeechBonus       : 1f;
+            float resourceYieldMul = Math.Abs(resourceYieldBonus)    > 0.0001f ? 1f + resourceYieldBonus    : 1f;
 
             // Clamp to sane values so things don't go completely nuclear
             if (attackSpeedMul < 0.1f) attackSpeedMul = 0.1f;
@@ -137,11 +149,26 @@ namespace SoloTweaker
             if (critDamageMul < 0.1f) critDamageMul = 0.1f;
             if (critDamageMul > 10f)  critDamageMul = 10f;
 
+            // Clamp leech bonuses (these are added, not multiplied, so clamp the raw bonus value)
+            float clampedPhysLeechBonus = physicalLeechBonus;
+            if (clampedPhysLeechBonus < -0.9f) clampedPhysLeechBonus = -0.9f;  // Min -90% (down to 10% of base if base > 0)
+            if (clampedPhysLeechBonus > 1.0f) clampedPhysLeechBonus = 1.0f;    // Max +100% leech
+
+            float clampedSpellLeechBonus = spellLeechBonus;
+            if (clampedSpellLeechBonus < -0.9f) clampedSpellLeechBonus = -0.9f;
+            if (clampedSpellLeechBonus > 1.0f) clampedSpellLeechBonus = 1.0f;
+
+            // Resource yield still uses multiplier
+            if (resourceYieldMul < 0.1f) resourceYieldMul = 0.1f;
+            if (resourceYieldMul > 10f)  resourceYieldMul = 10f;
+
             bool physChanged   = false;
             bool spellChanged  = false;
             bool healthChanged = false;
             bool moveChanged   = false;
             bool critChanged   = false;
+            bool leechChanged  = false;
+            bool yieldChanged  = false;
 
             // Track original values for exact revert
             float baseAbilityAttackSpeed = 0f;
@@ -153,6 +180,10 @@ namespace SoloTweaker
             float baseSpellPower = 0f;
             float basePhysicalCritChance = 0f;
             float basePhysicalCritDamage = 0f;
+            float basePhysicalLifeLeech = 0f;
+            float basePrimaryLeech = 0f;
+            float baseSpellLifeLeech = 0f;
+            float baseResourceYield = 0f;
 
             // ---- Attack speed ----
             if (attackSpeedMul != 1f)
@@ -309,13 +340,58 @@ namespace SoloTweaker
                 em.SetComponentData(character, attrs);
             }
 
+            // ---- Physical and Spell Leech (Lifesteal) ----
+            // Note: Leech starts at 0, so we ADD the bonus instead of multiplying
+            if ((physLeechMul != 1f || spellLeechMul != 1f) && em.HasComponent<LifeLeech>(character))
+            {
+                var leech = em.GetComponentData<LifeLeech>(character);
+
+                if (physLeechMul != 1f)
+                {
+                    // Store original values before modifying
+                    basePhysicalLifeLeech = leech.PhysicalLifeLeechFactor._Value;
+                    basePrimaryLeech = leech.PrimaryLeechFactor._Value;
+                    // Add the bonus percentage (0.10 = 10% leech)
+                    leech.PhysicalLifeLeechFactor._Value = basePhysicalLifeLeech + clampedPhysLeechBonus;
+                    // Also set PrimaryLeechFactor for basic weapon attacks (uses same value as physical)
+                    leech.PrimaryLeechFactor._Value = basePrimaryLeech + clampedPhysLeechBonus;
+                    leechChanged = true;
+                }
+
+                if (spellLeechMul != 1f)
+                {
+                    // Store original value before modifying
+                    baseSpellLifeLeech = leech.SpellLifeLeechFactor._Value;
+                    // Add the bonus percentage (0.10 = 10% leech)
+                    leech.SpellLifeLeechFactor._Value = baseSpellLifeLeech + clampedSpellLeechBonus;
+                    leechChanged = true;
+                }
+
+                em.SetComponentData(character, leech);
+            }
+
+            // ---- Resource Yield ----
+            if (resourceYieldMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
+            {
+                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
+
+                // Store original value before modifying
+                baseResourceYield = attrs.ResourceYieldModifier._Value;
+                attrs.ResourceYieldModifier._Value *= resourceYieldMul;
+                yieldChanged = true;
+
+                em.SetComponentData(character, attrs);
+            }
+
             // If literally nothing changed, don't store state
             if (attackSpeedMul == 1f &&
                 !physChanged &&
                 !spellChanged &&
                 !healthChanged &&
                 !moveChanged &&
-                !critChanged)
+                !critChanged &&
+                !leechChanged &&
+                !yieldChanged)
             {
                 return;
             }
@@ -329,6 +405,9 @@ namespace SoloTweaker
                 MoveSpeedMul           = moveSpeedMul,
                 CritChanceMul          = critChanceMul,
                 CritDamageMul          = critDamageMul,
+                PhysicalLeechMul       = physLeechMul,
+                SpellLeechMul          = spellLeechMul,
+                ResourceYieldMul       = resourceYieldMul,
                 BaseAbilityAttackSpeed = baseAbilityAttackSpeed,
                 BasePrimaryAttackSpeed = basePrimaryAttackSpeed,
                 BaseAbilityCastSpeed   = baseAbilityCastSpeed,
@@ -337,7 +416,11 @@ namespace SoloTweaker
                 BasePhysicalPower      = basePhysicalPower,
                 BaseSpellPower         = baseSpellPower,
                 BasePhysicalCritChance = basePhysicalCritChance,
-                BasePhysicalCritDamage = basePhysicalCritDamage
+                BasePhysicalCritDamage = basePhysicalCritDamage,
+                BasePhysicalLifeLeech  = basePhysicalLifeLeech,
+                BasePrimaryLeech       = basePrimaryLeech,
+                BaseSpellLifeLeech     = baseSpellLifeLeech,
+                BaseResourceYield      = baseResourceYield
             };
         }
 
@@ -469,6 +552,33 @@ namespace SoloTweaker
 
                 em.SetComponentData(character, attrs);
             }
+
+            // Undo leech buffs - restore exact original values
+            if ((state.PhysicalLeechMul != 1f || state.SpellLeechMul != 1f) && em.HasComponent<LifeLeech>(character))
+            {
+                var leech = em.GetComponentData<LifeLeech>(character);
+
+                if (state.PhysicalLeechMul != 1f)
+                {
+                    leech.PhysicalLifeLeechFactor._Value = state.BasePhysicalLifeLeech;
+                    leech.PrimaryLeechFactor._Value = state.BasePrimaryLeech;
+                }
+
+                if (state.SpellLeechMul != 1f)
+                    leech.SpellLifeLeechFactor._Value = state.BaseSpellLifeLeech;
+
+                em.SetComponentData(character, leech);
+            }
+
+            // Undo resource yield buff - restore exact original value
+            if (state.ResourceYieldMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
+            {
+                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
+
+                attrs.ResourceYieldModifier._Value = state.BaseResourceYield;
+
+                em.SetComponentData(character, attrs);
+            }
         }
 
         /// <summary>
@@ -483,7 +593,9 @@ namespace SoloTweaker
             bool clearSpellDamage,
             bool clearHealth,
             bool clearMoveSpeed,
-            bool clearCrit = true)
+            bool clearCrit = true,
+            bool clearLeech = true,
+            bool clearYield = true)
         {
             if (!_states.TryGetValue(character, out var state))
                 return;
@@ -492,7 +604,7 @@ namespace SoloTweaker
                 return;
 
             // Only remove from state tracking if we're clearing everything
-            bool clearingEverything = clearAttackSpeed && clearPhysicalDamage && clearSpellDamage && clearHealth && clearMoveSpeed && clearCrit;
+            bool clearingEverything = clearAttackSpeed && clearPhysicalDamage && clearSpellDamage && clearHealth && clearMoveSpeed && clearCrit && clearLeech && clearYield;
             if (clearingEverything)
             {
                 _states.Remove(character);
@@ -612,13 +724,40 @@ namespace SoloTweaker
 
                 em.SetComponentData(character, attrs);
             }
+
+            // Undo leech buffs - restore exact original values
+            if (clearLeech && (state.PhysicalLeechMul != 1f || state.SpellLeechMul != 1f) && em.HasComponent<LifeLeech>(character))
+            {
+                var leech = em.GetComponentData<LifeLeech>(character);
+
+                if (state.PhysicalLeechMul != 1f)
+                {
+                    leech.PhysicalLifeLeechFactor._Value = state.BasePhysicalLifeLeech;
+                    leech.PrimaryLeechFactor._Value = state.BasePrimaryLeech;
+                }
+
+                if (state.SpellLeechMul != 1f)
+                    leech.SpellLifeLeechFactor._Value = state.BaseSpellLifeLeech;
+
+                em.SetComponentData(character, leech);
+            }
+
+            // Undo resource yield buff - restore exact original value
+            if (clearYield && state.ResourceYieldMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
+            {
+                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
+
+                attrs.ResourceYieldModifier._Value = state.BaseResourceYield;
+
+                em.SetComponentData(character, attrs);
+            }
         }
 
         // --- Convenience helpers / back-compat ---
 
         public static void ApplyAttackSpeedBuff(EntityManager em, Entity character, float bonus)
         {
-            ApplyBuffs(em, character, bonus, 0f, 0f, 0f, 0f, 0f, 0f);
+            ApplyBuffs(em, character, bonus, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f);
         }
 
         public static void ClearAttackSpeedBuff(EntityManager em, Entity character)

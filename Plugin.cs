@@ -34,6 +34,9 @@ namespace SoloTweaker
         internal static ConfigEntry<float> SoloSpellDamagePercent;
         internal static ConfigEntry<float> SoloCritChancePercent;
         internal static ConfigEntry<float> SoloCritDamagePercent;
+        internal static ConfigEntry<float> SoloPhysicalLeechPercent;
+        internal static ConfigEntry<float> SoloSpellLeechPercent;
+        internal static ConfigEntry<float> SoloResourceYieldPercent;
 
 
         public override void Load()
@@ -150,6 +153,27 @@ namespace SoloTweaker
                 "CritDamagePercent",
                 0.10f,
                 "Physical crit damage bonus when solo (0.10 = +10% crit damage). 0 = no crit damage buff."
+            );
+
+            SoloPhysicalLeechPercent = Config.Bind<float>(
+                "Solo Buffs",
+                "PhysicalLeechPercent",
+                0.10f,
+                "Physical lifesteal bonus when solo (0.10 = +10% physical leech). 0 = no leech buff."
+            );
+
+            SoloSpellLeechPercent = Config.Bind<float>(
+                "Solo Buffs",
+                "SpellLeechPercent",
+                0.10f,
+                "Spell lifesteal bonus when solo (0.10 = +10% spell leech). 0 = no spell leech buff."
+            );
+
+            SoloResourceYieldPercent = Config.Bind<float>(
+                "Solo Buffs",
+                "ResourceYieldPercent",
+                0.10f,
+                "Resource gathering bonus when solo (0.10 = +10% resource yield). 0 = no yield buff."
             );
         }
 

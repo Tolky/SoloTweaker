@@ -17,6 +17,9 @@ namespace SoloTweaker
         private static float MoveSpeedPercent    => Plugin.SoloMoveSpeedPercent.Value;
         private static float CritChanceBonus     => Plugin.SoloCritChancePercent.Value;
         private static float CritDamageBonus     => Plugin.SoloCritDamagePercent.Value;
+        private static float PhysicalLeechBonus  => Plugin.SoloPhysicalLeechPercent.Value;
+        private static float SpellLeechBonus     => Plugin.SoloSpellLeechPercent.Value;
+        private static float ResourceYieldBonus  => Plugin.SoloResourceYieldPercent.Value;
         private static float YieldMultiplier     => Plugin.SoloYieldMultiplier.Value;
         private static bool  NoCooldown          => Plugin.SoloNoCooldown.Value;
         private static bool  SunInvuln           => Plugin.SoloSunInvulnerable.Value;
@@ -134,7 +137,10 @@ namespace SoloTweaker
                     HealthPercentBonus,    // 0.10 = +10% max HP
                     MoveSpeedPercent,      // 0.10 = +10% move speed
                     CritChanceBonus,       // 0.10 = +10% crit chance
-                    CritDamageBonus        // 0.10 = +10% crit damage
+                    CritDamageBonus,       // 0.10 = +10% crit damage
+                    PhysicalLeechBonus,    // 0.10 = +10% physical leech
+                    SpellLeechBonus,       // 0.10 = +10% spell leech
+                    ResourceYieldBonus     // 0.10 = +10% resource yield
                 );
 
                 _buffedCharacters.Add(character);

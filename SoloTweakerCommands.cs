@@ -1,4 +1,7 @@
 using System;
+using ProjectM;
+using ProjectM.Network;
+using ProjectM.Shared;
 using Unity.Entities;
 using VampireCommandFramework;
 
@@ -111,6 +114,73 @@ namespace SoloTweaker
 
             SoloBuffLogic.SetUserOptOut(em, ctx.Event.SenderUserEntity);
             ctx.Reply("[SoloTweaker] Your solo buffs are now <color=red>DISABLED</color>.");
+        }
+
+        [Command("solodebug", null, null, "Debug leech and resource yield values", null, true)]
+        public static void SoloDebug(ChatCommandContext ctx)
+        {
+            var serverWorld = SoloBuffLogic.GetServerWorld();
+            if (serverWorld == null || !serverWorld.IsCreated)
+            {
+                ctx.Reply("[SoloTweaker] Server world not ready yet.");
+                return;
+            }
+
+            EntityManager em = serverWorld.EntityManager;
+            var user = em.GetComponentData<User>(ctx.Event.SenderUserEntity);
+            var character = user.LocalCharacter._Entity;
+
+            if (character == Entity.Null || !em.Exists(character))
+            {
+                ctx.Reply("[SoloTweaker] No character found.");
+                return;
+            }
+
+            string msg = "[SoloTweaker] Debug Info:\n";
+
+            // Check if character has buff
+            bool hasBuff = SoloStatBoostService.HasBuff(character);
+            msg += $"Has SoloTweaker Buff: {hasBuff}\n\n";
+
+            // Check if LifeLeech component exists
+            if (em.HasComponent<LifeLeech>(character))
+            {
+                var leech = em.GetComponentData<LifeLeech>(character);
+                msg += $"LifeLeech Component Found:\n";
+                msg += $"  PhysicalLifeLeechFactor: {leech.PhysicalLifeLeechFactor._Value}\n";
+                msg += $"  SpellLifeLeechFactor: {leech.SpellLifeLeechFactor._Value}\n";
+                msg += $"  PrimaryLeechFactor: {leech.PrimaryLeechFactor}\n";
+            }
+            else
+            {
+                msg += "LifeLeech Component: NOT FOUND\n";
+            }
+
+            // Check ResourceYieldModifier
+            if (em.HasComponent<ProjectM.Shared.VampireSpecificAttributes>(character))
+            {
+                var attrs = em.GetComponentData<ProjectM.Shared.VampireSpecificAttributes>(character);
+                msg += $"ResourceYieldModifier: {attrs.ResourceYieldModifier._Value}\n";
+            }
+            else
+            {
+                msg += "VampireSpecificAttributes Component: NOT FOUND\n";
+            }
+
+            // Show config values and multipliers
+            msg += $"\nConfig Values:\n";
+            msg += $"  PhysicalLeechPercent: {Plugin.SoloPhysicalLeechPercent.Value}\n";
+            msg += $"  SpellLeechPercent: {Plugin.SoloSpellLeechPercent.Value}\n";
+            msg += $"  ResourceYieldPercent: {Plugin.SoloResourceYieldPercent.Value}\n";
+
+            float physLeechMul = System.Math.Abs(Plugin.SoloPhysicalLeechPercent.Value) > 0.0001f ? 1f + Plugin.SoloPhysicalLeechPercent.Value : 1f;
+            float spellLeechMul = System.Math.Abs(Plugin.SoloSpellLeechPercent.Value) > 0.0001f ? 1f + Plugin.SoloSpellLeechPercent.Value : 1f;
+
+            msg += $"\nCalculated Multipliers (before clamping):\n";
+            msg += $"  PhysicalLeechMul: {physLeechMul}\n";
+            msg += $"  SpellLeechMul: {spellLeechMul}\n";
+
+            ctx.Reply(msg);
         }
     }
 }

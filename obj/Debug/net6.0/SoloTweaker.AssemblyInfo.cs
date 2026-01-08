@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SoloTweaker")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fbcc46deeda06d4fcdb9ed61e09393acb163ba44")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f16d5580d926e6f6bf027ecd1c4792c736698557")]
 [assembly: System.Reflection.AssemblyProductAttribute("SoloTweaker")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SoloTweaker")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
