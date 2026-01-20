@@ -40,10 +40,13 @@ namespace SoloTweaker
             public float BaseAbilityCastSpeed;
             public float BaseMaxHealth;          // Store unbuffed max HP
             public float BaseMoveSpeed;
-            public float BasePhysicalPower;      // Store unbuffed physical power
-            public float BaseSpellPower;         // Store unbuffed spell power
-            public float BasePhysicalCritChance; // Store unbuffed physical crit chance
+            public float BasePhysicalPower;       // Store unbuffed physical power
+            public float BaseSpellPower;          // Store unbuffed spell power (UnitStats)
+            public float BaseBonusSpellPower;     // Store unbuffed bonus spell power (VampireSpecificAttributes)
+            public float BasePhysicalCritChance;  // Store unbuffed physical crit chance
             public float BasePhysicalCritDamage; // Store unbuffed physical crit damage
+            public float BaseSpellCritChance;    // Store unbuffed spell crit chance
+            public float BaseSpellCritDamage;    // Store unbuffed spell crit damage
             public float BasePhysicalLifeLeech;  // Store unbuffed physical leech
             public float BasePrimaryLeech;       // Store unbuffed primary/basic attack leech
             public float BaseSpellLifeLeech;     // Store unbuffed spell leech
@@ -143,20 +146,23 @@ namespace SoloTweaker
             if (moveSpeedMul < 0.1f) moveSpeedMul = 0.1f;
             if (moveSpeedMul > 3f)   moveSpeedMul = 3f;
 
+            // Crit chance multiplier (works like other stats - multiplicative)
             if (critChanceMul < 0.1f) critChanceMul = 0.1f;
-            if (critChanceMul > 5f)   critChanceMul = 5f;
+            if (critChanceMul > 10f)  critChanceMul = 10f;
 
+            // Crit damage multiplier (works normally since base is usually > 0)
             if (critDamageMul < 0.1f) critDamageMul = 0.1f;
             if (critDamageMul > 10f)  critDamageMul = 10f;
 
             // Clamp leech bonuses (these are added, not multiplied, so clamp the raw bonus value)
+            // V Rising leech factors: 0.0 to 0.5 is typical (0% to 50% lifesteal)
             float clampedPhysLeechBonus = physicalLeechBonus;
-            if (clampedPhysLeechBonus < -0.9f) clampedPhysLeechBonus = -0.9f;  // Min -90% (down to 10% of base if base > 0)
-            if (clampedPhysLeechBonus > 1.0f) clampedPhysLeechBonus = 1.0f;    // Max +100% leech
+            if (clampedPhysLeechBonus < 0f) clampedPhysLeechBonus = 0f;        // Min 0% leech
+            if (clampedPhysLeechBonus > 0.5f) clampedPhysLeechBonus = 0.5f;    // Max 50% leech (0.5 factor)
 
             float clampedSpellLeechBonus = spellLeechBonus;
-            if (clampedSpellLeechBonus < -0.9f) clampedSpellLeechBonus = -0.9f;
-            if (clampedSpellLeechBonus > 1.0f) clampedSpellLeechBonus = 1.0f;
+            if (clampedSpellLeechBonus < 0f) clampedSpellLeechBonus = 0f;
+            if (clampedSpellLeechBonus > 0.5f) clampedSpellLeechBonus = 0.5f;
 
             // Resource yield still uses multiplier
             if (resourceYieldMul < 0.1f) resourceYieldMul = 0.1f;
@@ -178,8 +184,11 @@ namespace SoloTweaker
             float baseMoveSpeed = 0f;
             float basePhysicalPower = 0f;
             float baseSpellPower = 0f;
+            float baseBonusSpellPower = 0f;
             float basePhysicalCritChance = 0f;
             float basePhysicalCritDamage = 0f;
+            float baseSpellCritChance = 0f;
+            float baseSpellCritDamage = 0f;
             float basePhysicalLifeLeech = 0f;
             float basePrimaryLeech = 0f;
             float baseSpellLifeLeech = 0f;
@@ -242,29 +251,9 @@ namespace SoloTweaker
                     em.SetComponentData(character, stats);
                 }
 
-                // Per-category damage multipliers (shared by physical and spells).
-                // We tie these to physical damage so spells don't get double-dipped too hard.
-                if (physDamageMul != 1f && em.HasComponent<DamageCategoryStats>(character))
-                {
-                    var cats = em.GetComponentData<DamageCategoryStats>(character);
-
-                    cats.DamageVsUndeads._Value       *= physDamageMul;
-                    cats.DamageVsHumans._Value        *= physDamageMul;
-                    cats.DamageVsDemons._Value        *= physDamageMul;
-                    cats.DamageVsMechanical._Value    *= physDamageMul;
-                    cats.DamageVsBeasts._Value        *= physDamageMul;
-                    cats.DamageVsCastleObjects._Value *= physDamageMul;
-                    cats.DamageVsVampires._Value      *= physDamageMul;
-                    cats.DamageVsWood._Value          *= physDamageMul;
-                    cats.DamageVsMineral._Value       *= physDamageMul;
-                    cats.DamageVsVegetation._Value    *= physDamageMul;
-                    cats.DamageVsLightArmor._Value    *= physDamageMul;
-                    cats.DamageVsVBloods._Value       *= physDamageMul;
-                    cats.DamageVsMagic._Value         *= physDamageMul;
-
-                    em.SetComponentData(character, cats);
-                    physChanged = true;
-                }
+                // NOTE: DamageCategoryStats (DamageVsUndeads, DamageVsHumans, etc.) is NOT modified
+                // because it applies to BOTH physical and spell damage. We only want to modify
+                // pure physical damage (PhysicalPower) to keep physical and spell separate.
             }
 
             // ---- Health ----
@@ -303,37 +292,44 @@ namespace SoloTweaker
                 moveChanged = true;
             }
 
-            // ---- VampireSpecificAttributes: spell damage knobs ----
+            // ---- Spell damage bonus (VampireSpecificAttributes.BonusSpellPower) ----
             if (spellDamageMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
             {
                 var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
 
-                attrs.BonusSpellPower._Value           *= spellDamageMul;
-                attrs.SpellCriticalStrikeChance._Value *= spellDamageMul;
-                attrs.SpellCriticalStrikeDamage._Value *= spellDamageMul;
+                baseBonusSpellPower = attrs.BonusSpellPower._Value;
+                attrs.BonusSpellPower._Value *= spellDamageMul;
 
                 em.SetComponentData(character, attrs);
                 spellChanged = true;
             }
 
-            // ---- Physical Crit Chance and Damage ----
+            // ---- Crit Chance and Damage (Physical and Spell) ----
             if ((critChanceMul != 1f || critDamageMul != 1f) && em.HasComponent<VampireSpecificAttributes>(character))
             {
                 var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
 
                 if (critChanceMul != 1f)
                 {
-                    // Store original value before modifying
+                    // Store original values before modifying
                     basePhysicalCritChance = attrs.PhysicalCriticalStrikeChance._Value;
+                    baseSpellCritChance = attrs.SpellCriticalStrikeChance._Value;
+
+                    // Multiply crit chance (0.10 config = 10% increase: 50% base * 1.10 = 55% final)
                     attrs.PhysicalCriticalStrikeChance._Value *= critChanceMul;
+                    attrs.SpellCriticalStrikeChance._Value *= critChanceMul;
                     critChanged = true;
                 }
 
                 if (critDamageMul != 1f)
                 {
-                    // Store original value before modifying
+                    // Store original values before modifying
                     basePhysicalCritDamage = attrs.PhysicalCriticalStrikeDamage._Value;
+                    baseSpellCritDamage = attrs.SpellCriticalStrikeDamage._Value;
+
+                    // Multiply crit damage (this works better since base crit damage is usually > 0)
                     attrs.PhysicalCriticalStrikeDamage._Value *= critDamageMul;
+                    attrs.SpellCriticalStrikeDamage._Value *= critDamageMul;
                     critChanged = true;
                 }
 
@@ -415,8 +411,11 @@ namespace SoloTweaker
                 BaseMoveSpeed          = baseMoveSpeed,
                 BasePhysicalPower      = basePhysicalPower,
                 BaseSpellPower         = baseSpellPower,
+                BaseBonusSpellPower    = baseBonusSpellPower,
                 BasePhysicalCritChance = basePhysicalCritChance,
                 BasePhysicalCritDamage = basePhysicalCritDamage,
+                BaseSpellCritChance    = baseSpellCritChance,
+                BaseSpellCritDamage    = baseSpellCritDamage,
                 BasePhysicalLifeLeech  = basePhysicalLifeLeech,
                 BasePrimaryLeech       = basePrimaryLeech,
                 BaseSpellLifeLeech     = baseSpellLifeLeech,
@@ -478,34 +477,13 @@ namespace SoloTweaker
                     em.SetComponentData(character, stats);
                 }
 
-                if (state.PhysicalDamageMul != 1f && em.HasComponent<DamageCategoryStats>(character))
-                {
-                    var cats = em.GetComponentData<DamageCategoryStats>(character);
-
-                    cats.DamageVsUndeads._Value       /= state.PhysicalDamageMul;
-                    cats.DamageVsHumans._Value        /= state.PhysicalDamageMul;
-                    cats.DamageVsDemons._Value        /= state.PhysicalDamageMul;
-                    cats.DamageVsMechanical._Value    /= state.PhysicalDamageMul;
-                    cats.DamageVsBeasts._Value        /= state.PhysicalDamageMul;
-                    cats.DamageVsCastleObjects._Value /= state.PhysicalDamageMul;
-                    cats.DamageVsVampires._Value      /= state.PhysicalDamageMul;
-                    cats.DamageVsWood._Value          /= state.PhysicalDamageMul;
-                    cats.DamageVsMineral._Value       /= state.PhysicalDamageMul;
-                    cats.DamageVsVegetation._Value    /= state.PhysicalDamageMul;
-                    cats.DamageVsLightArmor._Value    /= state.PhysicalDamageMul;
-                    cats.DamageVsVBloods._Value       /= state.PhysicalDamageMul;
-                    cats.DamageVsMagic._Value         /= state.PhysicalDamageMul;
-
-                    em.SetComponentData(character, cats);
-                }
+                // NOTE: DamageCategoryStats clearing removed - we don't modify it anymore
 
                 if (state.SpellDamageMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
                 {
                     var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
 
-                    attrs.BonusSpellPower._Value           /= state.SpellDamageMul;
-                    attrs.SpellCriticalStrikeChance._Value /= state.SpellDamageMul;
-                    attrs.SpellCriticalStrikeDamage._Value /= state.SpellDamageMul;
+                    attrs.BonusSpellPower._Value = state.BaseBonusSpellPower;
 
                     em.SetComponentData(character, attrs);
                 }
@@ -539,16 +517,22 @@ namespace SoloTweaker
                 em.SetComponentData(character, move);
             }
 
-            // Undo physical crit buffs - restore exact original values
+            // Undo crit buffs (physical and spell) - restore exact original values
             if ((state.CritChanceMul != 1f || state.CritDamageMul != 1f) && em.HasComponent<VampireSpecificAttributes>(character))
             {
                 var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
 
                 if (state.CritChanceMul != 1f)
+                {
                     attrs.PhysicalCriticalStrikeChance._Value = state.BasePhysicalCritChance;
+                    attrs.SpellCriticalStrikeChance._Value = state.BaseSpellCritChance;
+                }
 
                 if (state.CritDamageMul != 1f)
+                {
                     attrs.PhysicalCriticalStrikeDamage._Value = state.BasePhysicalCritDamage;
+                    attrs.SpellCriticalStrikeDamage._Value = state.BaseSpellCritDamage;
+                }
 
                 em.SetComponentData(character, attrs);
             }
@@ -650,34 +634,13 @@ namespace SoloTweaker
                     em.SetComponentData(character, stats);
                 }
 
-                if (clearPhysicalDamage && state.PhysicalDamageMul != 1f && em.HasComponent<DamageCategoryStats>(character))
-                {
-                    var cats = em.GetComponentData<DamageCategoryStats>(character);
-
-                    cats.DamageVsUndeads._Value       /= state.PhysicalDamageMul;
-                    cats.DamageVsHumans._Value        /= state.PhysicalDamageMul;
-                    cats.DamageVsDemons._Value        /= state.PhysicalDamageMul;
-                    cats.DamageVsMechanical._Value    /= state.PhysicalDamageMul;
-                    cats.DamageVsBeasts._Value        /= state.PhysicalDamageMul;
-                    cats.DamageVsCastleObjects._Value /= state.PhysicalDamageMul;
-                    cats.DamageVsVampires._Value      /= state.PhysicalDamageMul;
-                    cats.DamageVsWood._Value          /= state.PhysicalDamageMul;
-                    cats.DamageVsMineral._Value       /= state.PhysicalDamageMul;
-                    cats.DamageVsVegetation._Value    /= state.PhysicalDamageMul;
-                    cats.DamageVsLightArmor._Value    /= state.PhysicalDamageMul;
-                    cats.DamageVsVBloods._Value       /= state.PhysicalDamageMul;
-                    cats.DamageVsMagic._Value         /= state.PhysicalDamageMul;
-
-                    em.SetComponentData(character, cats);
-                }
+                // NOTE: DamageCategoryStats clearing removed - we don't modify it anymore
 
                 if (clearSpellDamage && state.SpellDamageMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
                 {
                     var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
 
-                    attrs.BonusSpellPower._Value           /= state.SpellDamageMul;
-                    attrs.SpellCriticalStrikeChance._Value /= state.SpellDamageMul;
-                    attrs.SpellCriticalStrikeDamage._Value /= state.SpellDamageMul;
+                    attrs.BonusSpellPower._Value = state.BaseBonusSpellPower;
 
                     em.SetComponentData(character, attrs);
                 }
@@ -711,16 +674,22 @@ namespace SoloTweaker
                 em.SetComponentData(character, move);
             }
 
-            // Undo physical crit buffs - restore exact original values
+            // Undo crit buffs (physical and spell) - restore exact original values
             if (clearCrit && (state.CritChanceMul != 1f || state.CritDamageMul != 1f) && em.HasComponent<VampireSpecificAttributes>(character))
             {
                 var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
 
                 if (state.CritChanceMul != 1f)
+                {
                     attrs.PhysicalCriticalStrikeChance._Value = state.BasePhysicalCritChance;
+                    attrs.SpellCriticalStrikeChance._Value = state.BaseSpellCritChance;
+                }
 
                 if (state.CritDamageMul != 1f)
+                {
                     attrs.PhysicalCriticalStrikeDamage._Value = state.BasePhysicalCritDamage;
+                    attrs.SpellCriticalStrikeDamage._Value = state.BaseSpellCritDamage;
+                }
 
                 em.SetComponentData(character, attrs);
             }

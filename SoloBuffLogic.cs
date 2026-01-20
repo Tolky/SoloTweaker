@@ -20,9 +20,6 @@ namespace SoloTweaker
         private static float PhysicalLeechBonus  => Plugin.SoloPhysicalLeechPercent.Value;
         private static float SpellLeechBonus     => Plugin.SoloSpellLeechPercent.Value;
         private static float ResourceYieldBonus  => Plugin.SoloResourceYieldPercent.Value;
-        private static float YieldMultiplier     => Plugin.SoloYieldMultiplier.Value;
-        private static bool  NoCooldown          => Plugin.SoloNoCooldown.Value;
-        private static bool  SunInvuln           => Plugin.SoloSunInvulnerable.Value;
         private static int   ClanOfflineThresholdMinutes => Plugin.SoloClanOfflineThresholdMinutes.Value;
 
 
@@ -30,6 +27,17 @@ namespace SoloTweaker
         private static World? _serverWorld;
         private static readonly HashSet<Entity> _buffedCharacters = new();
         private static readonly HashSet<Entity> _optOutUsers      = new();
+
+        // Track when users disconnect to properly enforce the offline threshold
+        private static readonly Dictionary<Entity, DateTime> _userDisconnectTimes = new();
+
+        // Track when users leave their clan to prevent bypassing the timer
+        private static readonly Dictionary<Entity, DateTime> _userClanLeaveTimes = new();
+        private static readonly Dictionary<Entity, Entity> _userLastClan = new();
+
+        // Track when someone left a specific clan (clan entity -> departure time)
+        // This ensures remaining members don't get instant buffs
+        private static readonly Dictionary<Entity, DateTime> _clanMemberDepartureTimes = new();
 
         public static World GetServerWorld()
         {
@@ -68,24 +76,119 @@ namespace SoloTweaker
             };
 
             var query = em.CreateEntityQuery(desc);
-            var users = query.ToEntityArray(Allocator.TempJob);
+            var users = query.ToEntityArray(Allocator.Temp);
 
-            try
+            // Track disconnect times and clan changes - use indexed for loop to avoid enumerator disposal
+            for (int i = 0; i < users.Length; i++)
             {
-                foreach (var userEntity in users)
+                var userEntity = users[i];
+                if (em.Exists(userEntity) && em.HasComponent<User>(userEntity))
                 {
-                    UpdateBuffForUser(em, userEntity);
+                    var user = em.GetComponentData<User>(userEntity);
+                    var currentClan = user.ClanEntity._Entity;
+
+                    // Track disconnect times (actual network disconnects)
+                    if (!user.IsConnected && !_userDisconnectTimes.ContainsKey(userEntity))
+                    {
+                        _userDisconnectTimes[userEntity] = DateTime.UtcNow;
+
+                        // If they're in a clan, record that someone left/disconnected from this clan
+                        if (currentClan != Entity.Null && em.Exists(currentClan))
+                        {
+                            _clanMemberDepartureTimes[currentClan] = DateTime.UtcNow;
+                        }
+                    }
+                    else if (user.IsConnected && _userDisconnectTimes.ContainsKey(userEntity))
+                    {
+                        // Only clear disconnect time if they're NOT in the clan leave timer
+                        // If they left a clan, keep the disconnect time until they join a new clan
+                        if (!_userClanLeaveTimes.ContainsKey(userEntity))
+                        {
+                            _userDisconnectTimes.Remove(userEntity);
+                        }
+                    }
+
+                    // Track clan changes (to prevent leave/rejoin exploit)
+                    if (user.IsConnected)
+                    {
+                        // Check if they had a clan before
+                        if (_userLastClan.TryGetValue(userEntity, out Entity lastClan))
+                        {
+                            // If they were in a clan but now aren't (left clan)
+                            if (lastClan != Entity.Null && em.Exists(lastClan) &&
+                                (currentClan == Entity.Null || !em.Exists(currentClan)))
+                            {
+                                // Record when they left their clan (for the person leaving)
+                                _userClanLeaveTimes[userEntity] = DateTime.UtcNow;
+                                _userDisconnectTimes[userEntity] = DateTime.UtcNow;
+
+                                // Record that someone left this clan (for remaining members)
+                                _clanMemberDepartureTimes[lastClan] = DateTime.UtcNow;
+                            }
+                            // If they joined a new clan or switched clans
+                            else if (currentClan != Entity.Null && em.Exists(currentClan) && currentClan != lastClan)
+                            {
+                                // Clear the leave timer
+                                _userClanLeaveTimes.Remove(userEntity);
+                                // Also remove disconnect time since they're back in a clan
+                                _userDisconnectTimes.Remove(userEntity);
+                            }
+                        }
+                        // else: First time seeing this user - will be set below
+
+                        // Always update their last known clan (handles both first time and updates)
+                        _userLastClan[userEntity] = currentClan;
+                    }
                 }
             }
-            finally
+
+            // Update buffs for all users - use indexed for loop to avoid enumerator disposal
+            for (int i = 0; i < users.Length; i++)
             {
-                if (users.IsCreated)
-                    users.Dispose();
+                UpdateBuffForUser(em, users[i]);
             }
 
-     
-            _buffedCharacters.RemoveWhere(e => !em.Exists(e));
-            _optOutUsers.RemoveWhere(e => !em.Exists(e));
+            // Dispose properly - MUST dispose Temp allocations or we get memory leaks
+            users.Dispose();
+
+
+            // Clean up buffed characters (manual loop to avoid IL2CPP RemoveWhere issues)
+            var buffedCharsToRemove = new List<Entity>();
+            foreach (var e in _buffedCharacters)
+            {
+                if (!em.Exists(e))
+                    buffedCharsToRemove.Add(e);
+            }
+            foreach (var e in buffedCharsToRemove)
+            {
+                _buffedCharacters.Remove(e);
+            }
+
+            // Clean up opted out users (manual loop to avoid IL2CPP RemoveWhere issues)
+            var optOutToRemove = new List<Entity>();
+            foreach (var e in _optOutUsers)
+            {
+                if (!em.Exists(e))
+                    optOutToRemove.Add(e);
+            }
+            foreach (var e in optOutToRemove)
+            {
+                _optOutUsers.Remove(e);
+            }
+
+            // Clean up tracking data for entities that no longer exist
+            var keysToRemove = new List<Entity>();
+            foreach (var kvp in _userDisconnectTimes)
+            {
+                if (!em.Exists(kvp.Key))
+                    keysToRemove.Add(kvp.Key);
+            }
+            foreach (var key in keysToRemove)
+            {
+                _userDisconnectTimes.Remove(key);
+                _userClanLeaveTimes.Remove(key);
+                _userLastClan.Remove(key);
+            }
         }
 
         public static void UpdateBuffForUser(EntityManager em, Entity userEntity)
@@ -123,7 +226,6 @@ namespace SoloTweaker
             if (character == Entity.Null || !em.Exists(character))
                 return;
 
-    
             bool isSolo = IsUserSolo(em, userEntity, user, out var clanEntity, out var onlineCount);
 
             if (isSolo)
@@ -150,8 +252,6 @@ namespace SoloTweaker
                 SoloStatBoostService.Clear(em, character);
                 _buffedCharacters.Remove(character);
             }
-
-            _buffedCharacters.RemoveWhere(e => !em.Exists(e));
         }
 
 
@@ -183,6 +283,23 @@ namespace SoloTweaker
             if (clanEntity == Entity.Null || !em.Exists(clanEntity))
             {
                 info = "You are not in a clan.";
+
+                // Check if they recently left a clan
+                if (_userClanLeaveTimes.TryGetValue(userEntity, out DateTime leaveTime))
+                {
+                    var minutes = ClanOfflineThresholdMinutes;
+                    if (minutes < 0) minutes = 0;
+                    TimeSpan threshold = TimeSpan.FromMinutes(minutes);
+
+                    var timeSinceLeave = DateTime.UtcNow - leaveTime;
+                    var remaining = threshold - timeSinceLeave;
+
+                    if (remaining > TimeSpan.Zero)
+                    {
+                        var pretty = FormatTimeSpanShort(remaining);
+                        info += $"\nYou recently left a clan. Solo buff will become available in {pretty}.";
+                    }
+                }
             }
             else
             {
@@ -253,18 +370,58 @@ namespace SoloTweaker
             var netClanEntity = user.ClanEntity;
             clanEntity = netClanEntity._Entity;
 
-            // No clan at all -> SOLO
+            // No clan at all -> check if they recently left a clan
             if (clanEntity == Entity.Null || !em.Exists(clanEntity))
             {
+                // If they recently left a clan, apply the same threshold
+                if (_userClanLeaveTimes.TryGetValue(userEntity, out DateTime leaveTime))
+                {
+                    var thresholdMinutes = ClanOfflineThresholdMinutes;
+                    if (thresholdMinutes < 0) thresholdMinutes = 0;
+                    TimeSpan leaveThreshold = TimeSpan.FromMinutes(thresholdMinutes);
+
+                    var timeSinceLeave = DateTime.UtcNow - leaveTime;
+
+                    // If they left less than the threshold ago, NOT solo yet
+                    if (timeSinceLeave < leaveThreshold)
+                    {
+                        return false;
+                    }
+                    else
+                    {
+                        // Threshold passed, clear the leave time and allow solo
+                        _userClanLeaveTimes.Remove(userEntity);
+                        return true;
+                    }
+                }
+
+                // No clan and no recent leave - truly solo
                 return true;
             }
 
 
             var minutes = ClanOfflineThresholdMinutes;
-            if (minutes < 0) minutes = 0; 
+            if (minutes < 0) minutes = 0;
             TimeSpan offlineThreshold = TimeSpan.FromMinutes(minutes);
 
             DateTime nowUtc = DateTime.UtcNow;
+
+            // Check if someone recently left this clan
+            if (_clanMemberDepartureTimes.TryGetValue(clanEntity, out DateTime clanDepartureTime))
+            {
+                var timeSinceDeparture = nowUtc - clanDepartureTime;
+
+                if (timeSinceDeparture < offlineThreshold)
+                {
+                    // Someone left less than the threshold ago - NOT solo yet
+                    return false;
+                }
+                else
+                {
+                    // Threshold passed, clear the clan departure time
+                    _clanMemberDepartureTimes.Remove(clanEntity);
+                }
+            }
 
             var queryDesc = new EntityQueryDesc
             {
@@ -309,22 +466,45 @@ namespace SoloTweaker
                         // For other clan members who are offline, check how long they've been offline
                         if (uEntity != userEntity)
                         {
-                            DateTime lastOnlineUtc;
-                            try
+                            // Use our tracked disconnect time if available
+                            if (_userDisconnectTimes.TryGetValue(uEntity, out DateTime disconnectTime))
                             {
-                                lastOnlineUtc = DateTime.FromBinary(u.TimeLastConnected).ToUniversalTime();
-                            }
-                            catch
-                            {
-                                lastOnlineUtc = DateTime.MinValue;
-                            }
+                                var offlineDuration = nowUtc - disconnectTime;
 
-                            var offlineDuration = nowUtc - lastOnlineUtc;
-
-                            // If they were online less than 30 minutes ago, still treat as "not solo"
-                            if (offlineDuration < offlineThreshold)
+                                // If they disconnected less than the threshold ago, still treat as "not solo"
+                                if (offlineDuration < offlineThreshold)
+                                {
+                                    otherRecentOrOnline = true;
+                                }
+                            }
+                            else
                             {
-                                otherRecentOrOnline = true;
+                                // No tracked disconnect time - try to use TimeLastConnected as fallback
+                                DateTime lastOnlineUtc;
+                                try
+                                {
+                                    lastOnlineUtc = DateTime.FromBinary(u.TimeLastConnected).ToUniversalTime();
+                                }
+                                catch
+                                {
+                                    lastOnlineUtc = DateTime.MinValue;
+                                }
+
+                                // If we have a valid TimeLastConnected, use it
+                                if (lastOnlineUtc != DateTime.MinValue)
+                                {
+                                    var offlineDuration = nowUtc - lastOnlineUtc;
+
+                                    if (offlineDuration < offlineThreshold)
+                                    {
+                                        otherRecentOrOnline = true;
+                                    }
+                                }
+                                else
+                                {
+                                    // No valid disconnect time at all - treat as recently online to be safe
+                                    otherRecentOrOnline = true;
+                                }
                             }
                         }
                     }
@@ -332,10 +512,7 @@ namespace SoloTweaker
             }
             finally
             {
-                if (users.IsCreated)
-                    users.Dispose();
-
-                query.Dispose();
+                users.Dispose();
             }
 
             // SOLO if there are no other clan members currently online or recently online
@@ -385,10 +562,7 @@ namespace SoloTweaker
             }
             finally
             {
-                if (users.IsCreated)
-                    users.Dispose();
-
-                query.Dispose();
+                users.Dispose();
             }
         }
 
@@ -449,26 +623,59 @@ namespace SoloTweaker
                     else
                     {
                         // Offline clanmate: see how long they've been offline
-                        DateTime lastOnlineUtc;
-                        try
-                        {
-                            lastOnlineUtc = DateTime.FromBinary(u.TimeLastConnected).ToUniversalTime();
-                        }
-                        catch
-                        {
-                            lastOnlineUtc = DateTime.MinValue;
-                        }
+                        DateTime disconnectTime;
 
-                        var offlineDuration = nowUtc - lastOnlineUtc;
-                        var remaining = threshold - offlineDuration;
-
-                        // Only care about those who have not yet satisfied the threshold
-                        if (remaining > TimeSpan.Zero)
+                        // Use our tracked disconnect time if available
+                        if (_userDisconnectTimes.TryGetValue(uEntity, out disconnectTime))
                         {
-                            if (!hasRemaining || remaining > maxRemaining)
+                            var offlineDuration = nowUtc - disconnectTime;
+                            var remaining = threshold - offlineDuration;
+
+                            // Only care about those who have not yet satisfied the threshold
+                            if (remaining > TimeSpan.Zero)
                             {
-                                maxRemaining = remaining;
-                                hasRemaining = true;
+                                if (!hasRemaining || remaining > maxRemaining)
+                                {
+                                    maxRemaining = remaining;
+                                    hasRemaining = true;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Fallback to TimeLastConnected
+                            DateTime lastOnlineUtc;
+                            try
+                            {
+                                lastOnlineUtc = DateTime.FromBinary(u.TimeLastConnected).ToUniversalTime();
+                            }
+                            catch
+                            {
+                                lastOnlineUtc = DateTime.MinValue;
+                            }
+
+                            if (lastOnlineUtc != DateTime.MinValue)
+                            {
+                                var offlineDuration = nowUtc - lastOnlineUtc;
+                                var remaining = threshold - offlineDuration;
+
+                                if (remaining > TimeSpan.Zero)
+                                {
+                                    if (!hasRemaining || remaining > maxRemaining)
+                                    {
+                                        maxRemaining = remaining;
+                                        hasRemaining = true;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // No valid time - assume they need to wait full threshold
+                                if (!hasRemaining || threshold > maxRemaining)
+                                {
+                                    maxRemaining = threshold;
+                                    hasRemaining = true;
+                                }
                             }
                         }
                     }
@@ -476,10 +683,7 @@ namespace SoloTweaker
             }
             finally
             {
-                if (users.IsCreated)
-                    users.Dispose();
-
-                query.Dispose();
+                users.Dispose();
             }
 
             if (otherOnline)

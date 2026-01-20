@@ -21,22 +21,24 @@ namespace SoloTweaker
 
         internal static Plugin? Instance;
 
+        // Combat Stats
         internal static ConfigEntry<float> SoloAttackSpeedPercent = null!;
         internal static ConfigEntry<float> SoloDamagePercent      = null!;
-        internal static ConfigEntry<float> SoloHealthPercent;
-        internal static ConfigEntry<float> SoloMoveSpeedPercent;
-        internal static ConfigEntry<int>   SoloHealthBonus        = null!;
-        internal static ConfigEntry<float> SoloMoveSpeedBonus     = null!;
-        internal static ConfigEntry<float> SoloYieldMultiplier    = null!;
-        internal static ConfigEntry<bool>  SoloNoCooldown         = null!;
-        internal static ConfigEntry<bool>  SoloSunInvulnerable    = null!;
-        internal static ConfigEntry<int>   SoloClanOfflineThresholdMinutes = null!;
-        internal static ConfigEntry<float> SoloSpellDamagePercent;
-        internal static ConfigEntry<float> SoloCritChancePercent;
-        internal static ConfigEntry<float> SoloCritDamagePercent;
-        internal static ConfigEntry<float> SoloPhysicalLeechPercent;
-        internal static ConfigEntry<float> SoloSpellLeechPercent;
-        internal static ConfigEntry<float> SoloResourceYieldPercent;
+        internal static ConfigEntry<float> SoloSpellDamagePercent = null!;
+        internal static ConfigEntry<float> SoloCritChancePercent  = null!;
+        internal static ConfigEntry<float> SoloCritDamagePercent  = null!;
+
+        // Survivability
+        internal static ConfigEntry<float> SoloHealthPercent        = null!;
+        internal static ConfigEntry<float> SoloPhysicalLeechPercent = null!;
+        internal static ConfigEntry<float> SoloSpellLeechPercent    = null!;
+
+        // Mobility & Utility
+        internal static ConfigEntry<float> SoloMoveSpeedPercent     = null!;
+        internal static ConfigEntry<float> SoloResourceYieldPercent = null!;
+
+        // Clan Settings
+        internal static ConfigEntry<int> SoloClanOfflineThresholdMinutes = null!;
 
 
         public override void Load()
@@ -72,109 +74,75 @@ namespace SoloTweaker
 
         private void BindConfig()
         {
+            // ===== COMBAT STATS =====
             SoloAttackSpeedPercent = Config.Bind(
-                "Solo Buffs",
+                "1. Combat Stats",
                 "AttackSpeedPercent",
                 0.10f,
-                "Attack speed bonus when solo (0.10 = +10%).");
+                "Attack speed bonus when solo (0.10 = +10% attack speed). Set to 0 to disable.");
 
             SoloDamagePercent = Config.Bind(
-                "Solo Buffs",
-                "DamagePercent",
+                "1. Combat Stats",
+                "PhysicalDamagePercent",
                 0.10f,
-                "Damage bonus when solo (0.10 = +10% to physical and spell power).");
+                "Physical damage bonus when solo (0.10 = +10% physical power). Set to 0 to disable.");
 
-            SoloSpellDamagePercent = Config.Bind<float>(
-                "Solo Buffs",
+            SoloSpellDamagePercent = Config.Bind(
+                "1. Combat Stats",
                 "SpellDamagePercent",
                 0.10f,
-                "Spell damage bonus when solo (0.10 = +10% to spell damage only)."
-            );
+                "Spell damage bonus when solo (0.10 = +10% spell power). Set to 0 to disable.");
 
-            SoloHealthPercent = Config.Bind<float>(
-                "Solo Buffs",
-                "HealthPercent",
-                0.10f,
-                "Max health bonus when solo (0.10 = +10% max HP). 0 = no health buff."
-            );
-
-            SoloMoveSpeedPercent = Config.Bind<float>(
-                "Solo Buffs",
-                "MoveSpeedPercent",
-                0.10f,
-                "Move speed bonus when solo (0.10 = +10% move speed). 0 = no move speed buff."
-            );
-
-            SoloHealthBonus = Config.Bind(
-                "Solo Buffs",
-                "HealthBonus",
-                0,
-                "Extra health when solo. 0 = no health buff. (currently unused by buff service)");
-
-            SoloMoveSpeedBonus = Config.Bind(
-                "Solo Buffs",
-                "MoveSpeedBonus",
-                0f,
-                "Move speed bonus when solo (0.10 = +10%). 0 = no speed buff. (currently unused)");
-
-            SoloYieldMultiplier = Config.Bind(
-                "Solo Buffs",
-                "YieldMultiplier",
-                1f,
-                "Resource yield multiplier when solo. 1.0 = no change, 1.5 = +50%. (currently unused)");
-
-            SoloNoCooldown = Config.Bind(
-                "Solo Buffs",
-                "NoCooldown",
-                false,
-                "If true, solo players get no cooldowns. (currently unused)");
-
-            SoloSunInvulnerable = Config.Bind(
-                "Solo Buffs",
-                "SunInvulnerable",
-                false,
-                "If true, solo players are sun-invulnerable. (currently unused)");
-
-            SoloClanOfflineThresholdMinutes = Config.Bind(
-                "Solo Buffs",
-                "ClanOfflineThresholdMinutes",
-                30,
-                "Minutes other clan members must have been offline before you are treated as solo while in a clan. 0 = no delay.");
-
-            SoloCritChancePercent = Config.Bind<float>(
-                "Solo Buffs",
+            SoloCritChancePercent = Config.Bind(
+                "1. Combat Stats",
                 "CritChancePercent",
                 0.10f,
-                "Physical crit chance bonus when solo (0.10 = +10% crit chance). 0 = no crit chance buff."
-            );
+                "Critical strike chance multiplier when solo (0.10 = 10% more crit chance for both physical and spells, e.g., 50% base becomes 55%). Set to 0 to disable.");
 
-            SoloCritDamagePercent = Config.Bind<float>(
-                "Solo Buffs",
+            SoloCritDamagePercent = Config.Bind(
+                "1. Combat Stats",
                 "CritDamagePercent",
                 0.10f,
-                "Physical crit damage bonus when solo (0.10 = +10% crit damage). 0 = no crit damage buff."
-            );
+                "Critical strike damage multiplier when solo (0.10 = 10% more crit damage for both physical and spells). Set to 0 to disable.");
 
-            SoloPhysicalLeechPercent = Config.Bind<float>(
-                "Solo Buffs",
+            // ===== SURVIVABILITY =====
+            SoloHealthPercent = Config.Bind(
+                "2. Survivability",
+                "HealthPercent",
+                0.10f,
+                "Max health bonus when solo (0.10 = +10% max HP). Set to 0 to disable.");
+
+            SoloPhysicalLeechPercent = Config.Bind(
+                "2. Survivability",
                 "PhysicalLeechPercent",
                 0.10f,
-                "Physical lifesteal bonus when solo (0.10 = +10% physical leech). 0 = no leech buff."
-            );
+                "Physical lifesteal when solo (0.10 = 10% lifesteal on basic attacks and physical abilities). Set to 0 to disable.");
 
-            SoloSpellLeechPercent = Config.Bind<float>(
-                "Solo Buffs",
+            SoloSpellLeechPercent = Config.Bind(
+                "2. Survivability",
                 "SpellLeechPercent",
                 0.10f,
-                "Spell lifesteal bonus when solo (0.10 = +10% spell leech). 0 = no spell leech buff."
-            );
+                "Spell lifesteal when solo (0.10 = 10% lifesteal on spells). Set to 0 to disable.");
 
-            SoloResourceYieldPercent = Config.Bind<float>(
-                "Solo Buffs",
+            // ===== MOBILITY & UTILITY =====
+            SoloMoveSpeedPercent = Config.Bind(
+                "3. Mobility & Utility",
+                "MoveSpeedPercent",
+                0.10f,
+                "Move speed bonus when solo (0.10 = +10% move speed). Set to 0 to disable.");
+
+            SoloResourceYieldPercent = Config.Bind(
+                "3. Mobility & Utility",
                 "ResourceYieldPercent",
                 0.10f,
-                "Resource gathering bonus when solo (0.10 = +10% resource yield). 0 = no yield buff."
-            );
+                "Resource gathering bonus when solo (0.10 = +10% more resources from gathering). Set to 0 to disable.");
+
+            // ===== CLAN SETTINGS =====
+            SoloClanOfflineThresholdMinutes = Config.Bind(
+                "4. Clan Settings",
+                "ClanOfflineThresholdMinutes",
+                30,
+                "Minutes other clan members must be offline before you are treated as solo while in a clan. Set to 0 for instant solo status when clanmates go offline.");
         }
 
         internal static void ReloadConfig()

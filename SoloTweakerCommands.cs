@@ -23,8 +23,8 @@ namespace SoloTweaker
 
             EntityManager em = serverWorld.EntityManager;
 
-            SoloBuffLogic.UpdateBuffForUser(em, ctx.Event.SenderUserEntity);
-
+            // Don't force update - let the automatic update handle buffs
+            // Just show status
             if (!SoloBuffLogic.TryGetStatusForUser(
                     em,
                     ctx.Event.SenderUserEntity,
@@ -149,29 +149,41 @@ namespace SoloTweaker
                 msg += $"LifeLeech Component Found:\n";
                 msg += $"  PhysicalLifeLeechFactor: {leech.PhysicalLifeLeechFactor._Value}\n";
                 msg += $"  SpellLifeLeechFactor: {leech.SpellLifeLeechFactor._Value}\n";
-                msg += $"  PrimaryLeechFactor: {leech.PrimaryLeechFactor}\n";
+                msg += $"  PrimaryLeechFactor: {leech.PrimaryLeechFactor._Value}\n";
             }
             else
             {
                 msg += "LifeLeech Component: NOT FOUND\n";
             }
 
-            // Check ResourceYieldModifier
+            // Check VampireSpecificAttributes (crit, resource yield, etc)
             if (em.HasComponent<ProjectM.Shared.VampireSpecificAttributes>(character))
             {
                 var attrs = em.GetComponentData<ProjectM.Shared.VampireSpecificAttributes>(character);
-                msg += $"ResourceYieldModifier: {attrs.ResourceYieldModifier._Value}\n";
+                msg += $"\nVampireSpecificAttributes:\n";
+                msg += $"  PhysicalCriticalStrikeChance: {attrs.PhysicalCriticalStrikeChance._Value}\n";
+                msg += $"  PhysicalCriticalStrikeDamage: {attrs.PhysicalCriticalStrikeDamage._Value}\n";
+                msg += $"  SpellCriticalStrikeChance: {attrs.SpellCriticalStrikeChance._Value}\n";
+                msg += $"  SpellCriticalStrikeDamage: {attrs.SpellCriticalStrikeDamage._Value}\n";
+                msg += $"  ResourceYieldModifier: {attrs.ResourceYieldModifier._Value}\n";
             }
             else
             {
                 msg += "VampireSpecificAttributes Component: NOT FOUND\n";
             }
 
-            // Show config values and multipliers
+            // Show config values and calculated multipliers
             msg += $"\nConfig Values:\n";
+            msg += $"  CritChancePercent: {Plugin.SoloCritChancePercent.Value}\n";
+            msg += $"  CritDamagePercent: {Plugin.SoloCritDamagePercent.Value}\n";
             msg += $"  PhysicalLeechPercent: {Plugin.SoloPhysicalLeechPercent.Value}\n";
             msg += $"  SpellLeechPercent: {Plugin.SoloSpellLeechPercent.Value}\n";
             msg += $"  ResourceYieldPercent: {Plugin.SoloResourceYieldPercent.Value}\n";
+
+            // Show calculated multipliers
+            float critChanceMul = System.Math.Abs(Plugin.SoloCritChancePercent.Value) > 0.0001f ? 1f + Plugin.SoloCritChancePercent.Value : 1f;
+            msg += $"\nCalculated Multipliers:\n";
+            msg += $"  CritChance Multiplier: {critChanceMul}x (config {Plugin.SoloCritChancePercent.Value} becomes 1 + {Plugin.SoloCritChancePercent.Value} = {critChanceMul})\n";
 
             float physLeechMul = System.Math.Abs(Plugin.SoloPhysicalLeechPercent.Value) > 0.0001f ? 1f + Plugin.SoloPhysicalLeechPercent.Value : 1f;
             float spellLeechMul = System.Math.Abs(Plugin.SoloSpellLeechPercent.Value) > 0.0001f ? 1f + Plugin.SoloSpellLeechPercent.Value : 1f;
