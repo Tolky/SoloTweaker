@@ -7,50 +7,35 @@ using Unity.Entities;
 namespace SoloTweaker
 {
     /// <summary>
-    /// SoloTweaker's own stat boost service.
-    /// 
+    /// SoloTweaker's stat boost service.
+    ///
     /// Handles:
     ///   - Attack speed (abilities + primary + cast speed)
     ///   - Physical damage
     ///   - Spell damage
-    ///   - Max HP (directly modifies Health.MaxHealth)
-    ///   - Move speed (directly modifies Movement.Speed)
+    ///   - Max HP
+    ///   - Move speed
+    ///   - Crit chance/damage
+    ///   - Life leech
+    ///   - Resource yield
     ///
     /// All changes are tracked per character so we can undo them cleanly.
-    /// No Kindred / BoostedPlayerService involved.
     /// </summary>
     internal static class SoloStatBoostService
     {
         private struct StatState
         {
-            public float AttackSpeedMul;      // 1 = no change
-            public float PhysicalDamageMul;   // 1 = no change
-            public float SpellDamageMul;      // 1 = no change
-            public float HealthMul;           // 1 = no change (1.10 = +10%)
-            public float MoveSpeedMul;        // 1 = no change (1.10 = +10%)
-            public float CritChanceMul;       // 1 = no change (1.10 = +10%)
-            public float CritDamageMul;       // 1 = no change (1.10 = +10%)
-            public float PhysicalLeechMul;    // 1 = no change (1.10 = +10%)
-            public float SpellLeechMul;       // 1 = no change (1.10 = +10%)
-            public float ResourceYieldMul;    // 1 = no change (1.10 = +10%)
-
-            // Store original values for exact revert (prevents compounding errors)
-            public float BaseAbilityAttackSpeed;
-            public float BasePrimaryAttackSpeed;
-            public float BaseAbilityCastSpeed;
-            public float BaseMaxHealth;          // Store unbuffed max HP
-            public float BaseMoveSpeed;
-            public float BasePhysicalPower;       // Store unbuffed physical power
-            public float BaseSpellPower;          // Store unbuffed spell power (UnitStats)
-            public float BaseBonusSpellPower;     // Store unbuffed bonus spell power (VampireSpecificAttributes)
-            public float BasePhysicalCritChance;  // Store unbuffed physical crit chance
-            public float BasePhysicalCritDamage; // Store unbuffed physical crit damage
-            public float BaseSpellCritChance;    // Store unbuffed spell crit chance
-            public float BaseSpellCritDamage;    // Store unbuffed spell crit damage
-            public float BasePhysicalLifeLeech;  // Store unbuffed physical leech
-            public float BasePrimaryLeech;       // Store unbuffed primary/basic attack leech
-            public float BaseSpellLifeLeech;     // Store unbuffed spell leech
-            public float BaseResourceYield;      // Store unbuffed resource yield
+            // Store the multipliers being applied
+            public float AttackSpeedMul;
+            public float PhysicalDamageMul;
+            public float SpellDamageMul;
+            public float HealthMul;
+            public float MoveSpeedMul;
+            public float CritChanceMul;
+            public float CritDamageMul;
+            public float PhysicalLeechAdd;  // Leech is added, not multiplied
+            public float SpellLeechAdd;
+            public float ResourceYieldMul;
         }
 
         private static readonly Dictionary<Entity, StatState> _states = new();
@@ -58,6 +43,9 @@ namespace SoloTweaker
         /// <summary>
         /// Apply solo buffs for this character.
         /// All bonus parameters: 0.10f = +10%.
+        ///
+        /// This method reads the CURRENT stats from the game and applies multipliers.
+        /// It's safe to call repeatedly - stats will be re-read and re-applied fresh each time.
         /// </summary>
         public static void ApplyBuffs(
             EntityManager em,
@@ -76,46 +64,11 @@ namespace SoloTweaker
             if (!em.Exists(character))
                 return;
 
-            // Only clear buffs that are currently active (to avoid clearing already-unbuffed stats)
+            // If we already have buffs applied, clear them first
+            // This ensures we're working with clean base values
             if (_states.ContainsKey(character))
             {
-                var oldState = _states[character];
-
-                // Track which specific buffs need to be cleared
-                bool clearAttackSpeed = true;
-                bool clearPhysicalDamage = true;
-                bool clearSpellDamage = true;
-                bool clearHealth = true;
-                bool clearMoveSpeed = true;
-
-                // If we had an HP buff, check if it's still applied
-                if (oldState.HealthMul != 1f && em.HasComponent<Health>(character))
-                {
-                    var currentHealth = em.GetComponentData<Health>(character);
-                    float expectedBuffedHP = oldState.BaseMaxHealth * oldState.HealthMul;
-
-                    // If current HP doesn't match expected buffed HP, equipment changed - don't clear HP
-                    if (Math.Abs(currentHealth.MaxHealth._Value - expectedBuffedHP) > 1f)
-                    {
-                        clearHealth = false;
-                    }
-                }
-
-                // If we had a movement speed buff, check if it's still applied
-                if (oldState.MoveSpeedMul != 1f && em.HasComponent<Movement>(character))
-                {
-                    var currentMovement = em.GetComponentData<Movement>(character);
-                    float expectedBuffedSpeed = oldState.BaseMoveSpeed * oldState.MoveSpeedMul;
-
-                    // If current speed doesn't match expected buffed speed, equipment changed - don't clear move speed
-                    if (Math.Abs(currentMovement.Speed._Value - expectedBuffedSpeed) > 0.01f)
-                    {
-                        clearMoveSpeed = false;
-                    }
-                }
-
-                // Clear only the buffs that are still active
-                ClearSelective(em, character, clearAttackSpeed, clearPhysicalDamage, clearSpellDamage, clearHealth, clearMoveSpeed);
+                ClearInternal(em, character);
             }
 
             // Convert to multipliers
@@ -126,73 +79,23 @@ namespace SoloTweaker
             float moveSpeedMul     = Math.Abs(moveSpeedBonusPercent) > 0.0001f ? 1f + moveSpeedBonusPercent : 1f;
             float critChanceMul    = Math.Abs(critChanceBonus)       > 0.0001f ? 1f + critChanceBonus       : 1f;
             float critDamageMul    = Math.Abs(critDamageBonus)       > 0.0001f ? 1f + critDamageBonus       : 1f;
-            float physLeechMul     = Math.Abs(physicalLeechBonus)    > 0.0001f ? 1f + physicalLeechBonus    : 1f;
-            float spellLeechMul    = Math.Abs(spellLeechBonus)       > 0.0001f ? 1f + spellLeechBonus       : 1f;
             float resourceYieldMul = Math.Abs(resourceYieldBonus)    > 0.0001f ? 1f + resourceYieldBonus    : 1f;
 
-            // Clamp to sane values so things don't go completely nuclear
-            if (attackSpeedMul < 0.1f) attackSpeedMul = 0.1f;
-            if (attackSpeedMul > 5f)   attackSpeedMul = 5f;
+            // Clamp leech bonuses (these are added, not multiplied)
+            float clampedPhysLeechBonus = Math.Max(0f, Math.Min(0.5f, physicalLeechBonus));
+            float clampedSpellLeechBonus = Math.Max(0f, Math.Min(0.5f, spellLeechBonus));
 
-            if (physDamageMul < 0.1f) physDamageMul = 0.1f;
-            if (physDamageMul > 5f)   physDamageMul = 5f;
+            // Clamp multipliers to sane values
+            attackSpeedMul = Math.Max(0.1f, Math.Min(5f, attackSpeedMul));
+            physDamageMul = Math.Max(0.1f, Math.Min(5f, physDamageMul));
+            spellDamageMul = Math.Max(0.1f, Math.Min(20f, spellDamageMul));
+            healthMul = Math.Max(0.1f, Math.Min(10f, healthMul));
+            moveSpeedMul = Math.Max(0.1f, Math.Min(3f, moveSpeedMul));
+            critChanceMul = Math.Max(0.1f, Math.Min(10f, critChanceMul));
+            critDamageMul = Math.Max(0.1f, Math.Min(10f, critDamageMul));
+            resourceYieldMul = Math.Max(0.1f, Math.Min(10f, resourceYieldMul));
 
-            if (spellDamageMul < 0.1f) spellDamageMul = 0.1f;
-            if (spellDamageMul > 20f)  spellDamageMul = 20f;
-
-            if (healthMul < 0.1f) healthMul = 0.1f;
-            if (healthMul > 10f)  healthMul = 10f;
-
-            if (moveSpeedMul < 0.1f) moveSpeedMul = 0.1f;
-            if (moveSpeedMul > 3f)   moveSpeedMul = 3f;
-
-            // Crit chance multiplier (works like other stats - multiplicative)
-            if (critChanceMul < 0.1f) critChanceMul = 0.1f;
-            if (critChanceMul > 10f)  critChanceMul = 10f;
-
-            // Crit damage multiplier (works normally since base is usually > 0)
-            if (critDamageMul < 0.1f) critDamageMul = 0.1f;
-            if (critDamageMul > 10f)  critDamageMul = 10f;
-
-            // Clamp leech bonuses (these are added, not multiplied, so clamp the raw bonus value)
-            // V Rising leech factors: 0.0 to 0.5 is typical (0% to 50% lifesteal)
-            float clampedPhysLeechBonus = physicalLeechBonus;
-            if (clampedPhysLeechBonus < 0f) clampedPhysLeechBonus = 0f;        // Min 0% leech
-            if (clampedPhysLeechBonus > 0.5f) clampedPhysLeechBonus = 0.5f;    // Max 50% leech (0.5 factor)
-
-            float clampedSpellLeechBonus = spellLeechBonus;
-            if (clampedSpellLeechBonus < 0f) clampedSpellLeechBonus = 0f;
-            if (clampedSpellLeechBonus > 0.5f) clampedSpellLeechBonus = 0.5f;
-
-            // Resource yield still uses multiplier
-            if (resourceYieldMul < 0.1f) resourceYieldMul = 0.1f;
-            if (resourceYieldMul > 10f)  resourceYieldMul = 10f;
-
-            bool physChanged   = false;
-            bool spellChanged  = false;
-            bool healthChanged = false;
-            bool moveChanged   = false;
-            bool critChanged   = false;
-            bool leechChanged  = false;
-            bool yieldChanged  = false;
-
-            // Track original values for exact revert
-            float baseAbilityAttackSpeed = 0f;
-            float basePrimaryAttackSpeed = 0f;
-            float baseAbilityCastSpeed = 0f;
-            float baseMaxHealth = 0f;
-            float baseMoveSpeed = 0f;
-            float basePhysicalPower = 0f;
-            float baseSpellPower = 0f;
-            float baseBonusSpellPower = 0f;
-            float basePhysicalCritChance = 0f;
-            float basePhysicalCritDamage = 0f;
-            float baseSpellCritChance = 0f;
-            float baseSpellCritDamage = 0f;
-            float basePhysicalLifeLeech = 0f;
-            float basePrimaryLeech = 0f;
-            float baseSpellLifeLeech = 0f;
-            float baseResourceYield = 0f;
+            bool anyChanged = false;
 
             // ---- Attack speed ----
             if (attackSpeedMul != 1f)
@@ -200,28 +103,18 @@ namespace SoloTweaker
                 if (em.HasComponent<AbilityBar_Shared>(character))
                 {
                     var bar = em.GetComponentData<AbilityBar_Shared>(character);
-
-                    // Store original values
-                    baseAbilityAttackSpeed = bar.AbilityAttackSpeed._Value;
-                    basePrimaryAttackSpeed = bar.PrimaryAttackSpeed._Value;
-
-                    // Apply multiplier
                     bar.AbilityAttackSpeed._Value *= attackSpeedMul;
                     bar.PrimaryAttackSpeed._Value *= attackSpeedMul;
-
                     em.SetComponentData(character, bar);
+                    anyChanged = true;
                 }
 
                 if (em.HasComponent<Movement>(character))
                 {
                     var move = em.GetComponentData<Movement>(character);
-
-                    // Store original value
-                    baseAbilityCastSpeed = move.AbilityCastSpeedMultiplier;
-
-                    // Apply multiplier
                     move.AbilityCastSpeedMultiplier *= attackSpeedMul;
                     em.SetComponentData(character, move);
+                    anyChanged = true;
                 }
             }
 
@@ -234,35 +127,33 @@ namespace SoloTweaker
 
                     if (physDamageMul != 1f)
                     {
-                        // Store original value before modifying
-                        basePhysicalPower = stats.PhysicalPower._Value;
                         stats.PhysicalPower._Value *= physDamageMul;
-                        physChanged = true;
+                        anyChanged = true;
                     }
 
                     if (spellDamageMul != 1f)
                     {
-                        // Store original value before modifying
-                        baseSpellPower = stats.SpellPower._Value;
                         stats.SpellPower._Value *= spellDamageMul;
-                        spellChanged = true;
+                        anyChanged = true;
                     }
 
                     em.SetComponentData(character, stats);
                 }
+            }
 
-                // NOTE: DamageCategoryStats (DamageVsUndeads, DamageVsHumans, etc.) is NOT modified
-                // because it applies to BOTH physical and spell damage. We only want to modify
-                // pure physical damage (PhysicalPower) to keep physical and spell separate.
+            // ---- Spell damage bonus (VampireSpecificAttributes.BonusSpellPower) ----
+            if (spellDamageMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
+            {
+                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
+                attrs.BonusSpellPower._Value *= spellDamageMul;
+                em.SetComponentData(character, attrs);
+                anyChanged = true;
             }
 
             // ---- Health ----
             if (healthMul != 1f && em.HasComponent<Health>(character))
             {
                 var health = em.GetComponentData<Health>(character);
-
-                // Store the unbuffed max health
-                baseMaxHealth = health.MaxHealth._Value;
 
                 // Calculate current health as a percentage of max
                 float healthPercentage = health.MaxHealth._Value > 0 ? health.Value / health.MaxHealth._Value : 1f;
@@ -274,63 +165,35 @@ namespace SoloTweaker
                 health.Value = health.MaxHealth._Value * healthPercentage;
 
                 em.SetComponentData(character, health);
-                healthChanged = true;
+                anyChanged = true;
             }
 
             // ---- Movement Speed ----
             if (moveSpeedMul != 1f && em.HasComponent<Movement>(character))
             {
                 var move = em.GetComponentData<Movement>(character);
-
-                // Save original speed for exact revert later
-                baseMoveSpeed = move.Speed._Value;
-
-                // Apply multiplier to speed
                 move.Speed._Value *= moveSpeedMul;
-
                 em.SetComponentData(character, move);
-                moveChanged = true;
+                anyChanged = true;
             }
 
-            // ---- Spell damage bonus (VampireSpecificAttributes.BonusSpellPower) ----
-            if (spellDamageMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
-            {
-                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
-
-                baseBonusSpellPower = attrs.BonusSpellPower._Value;
-                attrs.BonusSpellPower._Value *= spellDamageMul;
-
-                em.SetComponentData(character, attrs);
-                spellChanged = true;
-            }
-
-            // ---- Crit Chance and Damage (Physical and Spell) ----
+            // ---- Crit Chance and Damage ----
             if ((critChanceMul != 1f || critDamageMul != 1f) && em.HasComponent<VampireSpecificAttributes>(character))
             {
                 var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
 
                 if (critChanceMul != 1f)
                 {
-                    // Store original values before modifying
-                    basePhysicalCritChance = attrs.PhysicalCriticalStrikeChance._Value;
-                    baseSpellCritChance = attrs.SpellCriticalStrikeChance._Value;
-
-                    // Multiply crit chance (0.10 config = 10% increase: 50% base * 1.10 = 55% final)
                     attrs.PhysicalCriticalStrikeChance._Value *= critChanceMul;
                     attrs.SpellCriticalStrikeChance._Value *= critChanceMul;
-                    critChanged = true;
+                    anyChanged = true;
                 }
 
                 if (critDamageMul != 1f)
                 {
-                    // Store original values before modifying
-                    basePhysicalCritDamage = attrs.PhysicalCriticalStrikeDamage._Value;
-                    baseSpellCritDamage = attrs.SpellCriticalStrikeDamage._Value;
-
-                    // Multiply crit damage (this works better since base crit damage is usually > 0)
                     attrs.PhysicalCriticalStrikeDamage._Value *= critDamageMul;
                     attrs.SpellCriticalStrikeDamage._Value *= critDamageMul;
-                    critChanged = true;
+                    anyChanged = true;
                 }
 
                 em.SetComponentData(character, attrs);
@@ -338,29 +201,21 @@ namespace SoloTweaker
 
             // ---- Physical and Spell Leech (Lifesteal) ----
             // Note: Leech starts at 0, so we ADD the bonus instead of multiplying
-            if ((physLeechMul != 1f || spellLeechMul != 1f) && em.HasComponent<LifeLeech>(character))
+            if ((clampedPhysLeechBonus > 0f || clampedSpellLeechBonus > 0f) && em.HasComponent<LifeLeech>(character))
             {
                 var leech = em.GetComponentData<LifeLeech>(character);
 
-                if (physLeechMul != 1f)
+                if (clampedPhysLeechBonus > 0f)
                 {
-                    // Store original values before modifying
-                    basePhysicalLifeLeech = leech.PhysicalLifeLeechFactor._Value;
-                    basePrimaryLeech = leech.PrimaryLeechFactor._Value;
-                    // Add the bonus percentage (0.10 = 10% leech)
-                    leech.PhysicalLifeLeechFactor._Value = basePhysicalLifeLeech + clampedPhysLeechBonus;
-                    // Also set PrimaryLeechFactor for basic weapon attacks (uses same value as physical)
-                    leech.PrimaryLeechFactor._Value = basePrimaryLeech + clampedPhysLeechBonus;
-                    leechChanged = true;
+                    leech.PhysicalLifeLeechFactor._Value += clampedPhysLeechBonus;
+                    leech.PrimaryLeechFactor._Value += clampedPhysLeechBonus;
+                    anyChanged = true;
                 }
 
-                if (spellLeechMul != 1f)
+                if (clampedSpellLeechBonus > 0f)
                 {
-                    // Store original value before modifying
-                    baseSpellLifeLeech = leech.SpellLifeLeechFactor._Value;
-                    // Add the bonus percentage (0.10 = 10% leech)
-                    leech.SpellLifeLeechFactor._Value = baseSpellLifeLeech + clampedSpellLeechBonus;
-                    leechChanged = true;
+                    leech.SpellLifeLeechFactor._Value += clampedSpellLeechBonus;
+                    anyChanged = true;
                 }
 
                 em.SetComponentData(character, leech);
@@ -370,64 +225,43 @@ namespace SoloTweaker
             if (resourceYieldMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
             {
                 var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
-
-                // Store original value before modifying
-                baseResourceYield = attrs.ResourceYieldModifier._Value;
                 attrs.ResourceYieldModifier._Value *= resourceYieldMul;
-                yieldChanged = true;
-
                 em.SetComponentData(character, attrs);
+                anyChanged = true;
             }
 
-            // If literally nothing changed, don't store state
-            if (attackSpeedMul == 1f &&
-                !physChanged &&
-                !spellChanged &&
-                !healthChanged &&
-                !moveChanged &&
-                !critChanged &&
-                !leechChanged &&
-                !yieldChanged)
-            {
+            // If nothing changed, don't store state
+            if (!anyChanged)
                 return;
-            }
 
+            // Store the multipliers we applied (for reverting)
             _states[character] = new StatState
             {
-                AttackSpeedMul         = attackSpeedMul,
-                PhysicalDamageMul      = physDamageMul,
-                SpellDamageMul         = spellDamageMul,
-                HealthMul              = healthMul,
-                MoveSpeedMul           = moveSpeedMul,
-                CritChanceMul          = critChanceMul,
-                CritDamageMul          = critDamageMul,
-                PhysicalLeechMul       = physLeechMul,
-                SpellLeechMul          = spellLeechMul,
-                ResourceYieldMul       = resourceYieldMul,
-                BaseAbilityAttackSpeed = baseAbilityAttackSpeed,
-                BasePrimaryAttackSpeed = basePrimaryAttackSpeed,
-                BaseAbilityCastSpeed   = baseAbilityCastSpeed,
-                BaseMaxHealth          = baseMaxHealth,
-                BaseMoveSpeed          = baseMoveSpeed,
-                BasePhysicalPower      = basePhysicalPower,
-                BaseSpellPower         = baseSpellPower,
-                BaseBonusSpellPower    = baseBonusSpellPower,
-                BasePhysicalCritChance = basePhysicalCritChance,
-                BasePhysicalCritDamage = basePhysicalCritDamage,
-                BaseSpellCritChance    = baseSpellCritChance,
-                BaseSpellCritDamage    = baseSpellCritDamage,
-                BasePhysicalLifeLeech  = basePhysicalLifeLeech,
-                BasePrimaryLeech       = basePrimaryLeech,
-                BaseSpellLifeLeech     = baseSpellLifeLeech,
-                BaseResourceYield      = baseResourceYield
+                AttackSpeedMul     = attackSpeedMul,
+                PhysicalDamageMul  = physDamageMul,
+                SpellDamageMul     = spellDamageMul,
+                HealthMul          = healthMul,
+                MoveSpeedMul       = moveSpeedMul,
+                CritChanceMul      = critChanceMul,
+                CritDamageMul      = critDamageMul,
+                PhysicalLeechAdd   = clampedPhysLeechBonus,
+                SpellLeechAdd      = clampedSpellLeechBonus,
+                ResourceYieldMul   = resourceYieldMul
             };
         }
 
         /// <summary>
         /// Clear all SoloTweaker buffs for this character.
-        /// Safe to call even if equipment has changed since buffs were applied.
         /// </summary>
         public static void Clear(EntityManager em, Entity character)
+        {
+            ClearInternal(em, character);
+        }
+
+        /// <summary>
+        /// Internal clear that reverses the applied multipliers.
+        /// </summary>
+        private static void ClearInternal(EntityManager em, Entity character)
         {
             if (!_states.TryGetValue(character, out var state))
                 return;
@@ -437,31 +271,26 @@ namespace SoloTweaker
             if (!em.Exists(character))
                 return;
 
-            // Undo attack speed - restore exact original values
+            // Reverse attack speed
             if (state.AttackSpeedMul != 1f)
             {
                 if (em.HasComponent<AbilityBar_Shared>(character))
                 {
                     var bar = em.GetComponentData<AbilityBar_Shared>(character);
-
-                    // Restore exact original values
-                    bar.AbilityAttackSpeed._Value = state.BaseAbilityAttackSpeed;
-                    bar.PrimaryAttackSpeed._Value = state.BasePrimaryAttackSpeed;
-
+                    bar.AbilityAttackSpeed._Value /= state.AttackSpeedMul;
+                    bar.PrimaryAttackSpeed._Value /= state.AttackSpeedMul;
                     em.SetComponentData(character, bar);
                 }
 
                 if (em.HasComponent<Movement>(character))
                 {
                     var move = em.GetComponentData<Movement>(character);
-
-                    // Restore exact original value
-                    move.AbilityCastSpeedMultiplier = state.BaseAbilityCastSpeed;
+                    move.AbilityCastSpeedMultiplier /= state.AttackSpeedMul;
                     em.SetComponentData(character, move);
                 }
             }
 
-            // Undo physical + spell damage - restore exact original values
+            // Reverse physical + spell damage
             if (state.PhysicalDamageMul != 1f || state.SpellDamageMul != 1f)
             {
                 if (em.HasComponent<UnitStats>(character))
@@ -469,269 +298,86 @@ namespace SoloTweaker
                     var stats = em.GetComponentData<UnitStats>(character);
 
                     if (state.PhysicalDamageMul != 1f)
-                        stats.PhysicalPower._Value = state.BasePhysicalPower;
+                        stats.PhysicalPower._Value /= state.PhysicalDamageMul;
 
                     if (state.SpellDamageMul != 1f)
-                        stats.SpellPower._Value = state.BaseSpellPower;
+                        stats.SpellPower._Value /= state.SpellDamageMul;
 
                     em.SetComponentData(character, stats);
                 }
 
-                // NOTE: DamageCategoryStats clearing removed - we don't modify it anymore
-
                 if (state.SpellDamageMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
                 {
                     var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
-
-                    attrs.BonusSpellPower._Value = state.BaseBonusSpellPower;
-
+                    attrs.BonusSpellPower._Value /= state.SpellDamageMul;
                     em.SetComponentData(character, attrs);
                 }
             }
 
-            // Undo health buff - restore exact unbuffed value
+            // Reverse health
             if (state.HealthMul != 1f && em.HasComponent<Health>(character))
             {
                 var health = em.GetComponentData<Health>(character);
 
-                // Calculate current health percentage
                 float healthPercentage = health.MaxHealth._Value > 0 ? health.Value / health.MaxHealth._Value : 1f;
-
-                // Restore exact unbuffed max health
-                health.MaxHealth._Value = state.BaseMaxHealth;
-
-                // Restore current health to same percentage of unbuffed max
-                health.Value = state.BaseMaxHealth * healthPercentage;
+                health.MaxHealth._Value /= state.HealthMul;
+                health.Value = health.MaxHealth._Value * healthPercentage;
 
                 em.SetComponentData(character, health);
             }
 
-            // Undo movement speed buff
+            // Reverse movement speed
             if (state.MoveSpeedMul != 1f && em.HasComponent<Movement>(character))
             {
                 var move = em.GetComponentData<Movement>(character);
-
-                // Restore exact original speed
-                move.Speed._Value = state.BaseMoveSpeed;
-
+                move.Speed._Value /= state.MoveSpeedMul;
                 em.SetComponentData(character, move);
             }
 
-            // Undo crit buffs (physical and spell) - restore exact original values
+            // Reverse crit
             if ((state.CritChanceMul != 1f || state.CritDamageMul != 1f) && em.HasComponent<VampireSpecificAttributes>(character))
             {
                 var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
 
                 if (state.CritChanceMul != 1f)
                 {
-                    attrs.PhysicalCriticalStrikeChance._Value = state.BasePhysicalCritChance;
-                    attrs.SpellCriticalStrikeChance._Value = state.BaseSpellCritChance;
+                    attrs.PhysicalCriticalStrikeChance._Value /= state.CritChanceMul;
+                    attrs.SpellCriticalStrikeChance._Value /= state.CritChanceMul;
                 }
 
                 if (state.CritDamageMul != 1f)
                 {
-                    attrs.PhysicalCriticalStrikeDamage._Value = state.BasePhysicalCritDamage;
-                    attrs.SpellCriticalStrikeDamage._Value = state.BaseSpellCritDamage;
+                    attrs.PhysicalCriticalStrikeDamage._Value /= state.CritDamageMul;
+                    attrs.SpellCriticalStrikeDamage._Value /= state.CritDamageMul;
                 }
 
                 em.SetComponentData(character, attrs);
             }
 
-            // Undo leech buffs - restore exact original values
-            if ((state.PhysicalLeechMul != 1f || state.SpellLeechMul != 1f) && em.HasComponent<LifeLeech>(character))
+            // Reverse leech (subtract what we added)
+            if ((state.PhysicalLeechAdd > 0f || state.SpellLeechAdd > 0f) && em.HasComponent<LifeLeech>(character))
             {
                 var leech = em.GetComponentData<LifeLeech>(character);
 
-                if (state.PhysicalLeechMul != 1f)
+                if (state.PhysicalLeechAdd > 0f)
                 {
-                    leech.PhysicalLifeLeechFactor._Value = state.BasePhysicalLifeLeech;
-                    leech.PrimaryLeechFactor._Value = state.BasePrimaryLeech;
+                    leech.PhysicalLifeLeechFactor._Value -= state.PhysicalLeechAdd;
+                    leech.PrimaryLeechFactor._Value -= state.PhysicalLeechAdd;
                 }
 
-                if (state.SpellLeechMul != 1f)
-                    leech.SpellLifeLeechFactor._Value = state.BaseSpellLifeLeech;
+                if (state.SpellLeechAdd > 0f)
+                    leech.SpellLifeLeechFactor._Value -= state.SpellLeechAdd;
 
                 em.SetComponentData(character, leech);
             }
 
-            // Undo resource yield buff - restore exact original value
+            // Reverse resource yield
             if (state.ResourceYieldMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
             {
                 var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
-
-                attrs.ResourceYieldModifier._Value = state.BaseResourceYield;
-
+                attrs.ResourceYieldModifier._Value /= state.ResourceYieldMul;
                 em.SetComponentData(character, attrs);
             }
-        }
-
-        /// <summary>
-        /// Selectively clear specific buffs for this character.
-        /// Allows clearing only certain buffs while leaving others intact (useful when equipment changes affect some stats but not others).
-        /// </summary>
-        private static void ClearSelective(
-            EntityManager em,
-            Entity character,
-            bool clearAttackSpeed,
-            bool clearPhysicalDamage,
-            bool clearSpellDamage,
-            bool clearHealth,
-            bool clearMoveSpeed,
-            bool clearCrit = true,
-            bool clearLeech = true,
-            bool clearYield = true)
-        {
-            if (!_states.TryGetValue(character, out var state))
-                return;
-
-            if (!em.Exists(character))
-                return;
-
-            // Only remove from state tracking if we're clearing everything
-            bool clearingEverything = clearAttackSpeed && clearPhysicalDamage && clearSpellDamage && clearHealth && clearMoveSpeed && clearCrit && clearLeech && clearYield;
-            if (clearingEverything)
-            {
-                _states.Remove(character);
-            }
-
-            // Undo attack speed - restore exact original values
-            if (clearAttackSpeed && state.AttackSpeedMul != 1f)
-            {
-                if (em.HasComponent<AbilityBar_Shared>(character))
-                {
-                    var bar = em.GetComponentData<AbilityBar_Shared>(character);
-
-                    // Restore exact original values
-                    bar.AbilityAttackSpeed._Value = state.BaseAbilityAttackSpeed;
-                    bar.PrimaryAttackSpeed._Value = state.BasePrimaryAttackSpeed;
-
-                    em.SetComponentData(character, bar);
-                }
-
-                if (em.HasComponent<Movement>(character))
-                {
-                    var move = em.GetComponentData<Movement>(character);
-
-                    // Restore exact original value
-                    move.AbilityCastSpeedMultiplier = state.BaseAbilityCastSpeed;
-                    em.SetComponentData(character, move);
-                }
-            }
-
-            // Undo physical + spell damage - restore exact original values
-            if ((clearPhysicalDamage && state.PhysicalDamageMul != 1f) || (clearSpellDamage && state.SpellDamageMul != 1f))
-            {
-                if (em.HasComponent<UnitStats>(character))
-                {
-                    var stats = em.GetComponentData<UnitStats>(character);
-
-                    if (clearPhysicalDamage && state.PhysicalDamageMul != 1f)
-                        stats.PhysicalPower._Value = state.BasePhysicalPower;
-
-                    if (clearSpellDamage && state.SpellDamageMul != 1f)
-                        stats.SpellPower._Value = state.BaseSpellPower;
-
-                    em.SetComponentData(character, stats);
-                }
-
-                // NOTE: DamageCategoryStats clearing removed - we don't modify it anymore
-
-                if (clearSpellDamage && state.SpellDamageMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
-                {
-                    var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
-
-                    attrs.BonusSpellPower._Value = state.BaseBonusSpellPower;
-
-                    em.SetComponentData(character, attrs);
-                }
-            }
-
-            // Undo health buff - restore exact unbuffed value
-            if (clearHealth && state.HealthMul != 1f && em.HasComponent<Health>(character))
-            {
-                var health = em.GetComponentData<Health>(character);
-
-                // Calculate current health percentage
-                float healthPercentage = health.MaxHealth._Value > 0 ? health.Value / health.MaxHealth._Value : 1f;
-
-                // Restore exact unbuffed max health
-                health.MaxHealth._Value = state.BaseMaxHealth;
-
-                // Restore current health to same percentage of unbuffed max
-                health.Value = state.BaseMaxHealth * healthPercentage;
-
-                em.SetComponentData(character, health);
-            }
-
-            // Undo movement speed buff
-            if (clearMoveSpeed && state.MoveSpeedMul != 1f && em.HasComponent<Movement>(character))
-            {
-                var move = em.GetComponentData<Movement>(character);
-
-                // Restore exact original speed
-                move.Speed._Value = state.BaseMoveSpeed;
-
-                em.SetComponentData(character, move);
-            }
-
-            // Undo crit buffs (physical and spell) - restore exact original values
-            if (clearCrit && (state.CritChanceMul != 1f || state.CritDamageMul != 1f) && em.HasComponent<VampireSpecificAttributes>(character))
-            {
-                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
-
-                if (state.CritChanceMul != 1f)
-                {
-                    attrs.PhysicalCriticalStrikeChance._Value = state.BasePhysicalCritChance;
-                    attrs.SpellCriticalStrikeChance._Value = state.BaseSpellCritChance;
-                }
-
-                if (state.CritDamageMul != 1f)
-                {
-                    attrs.PhysicalCriticalStrikeDamage._Value = state.BasePhysicalCritDamage;
-                    attrs.SpellCriticalStrikeDamage._Value = state.BaseSpellCritDamage;
-                }
-
-                em.SetComponentData(character, attrs);
-            }
-
-            // Undo leech buffs - restore exact original values
-            if (clearLeech && (state.PhysicalLeechMul != 1f || state.SpellLeechMul != 1f) && em.HasComponent<LifeLeech>(character))
-            {
-                var leech = em.GetComponentData<LifeLeech>(character);
-
-                if (state.PhysicalLeechMul != 1f)
-                {
-                    leech.PhysicalLifeLeechFactor._Value = state.BasePhysicalLifeLeech;
-                    leech.PrimaryLeechFactor._Value = state.BasePrimaryLeech;
-                }
-
-                if (state.SpellLeechMul != 1f)
-                    leech.SpellLifeLeechFactor._Value = state.BaseSpellLifeLeech;
-
-                em.SetComponentData(character, leech);
-            }
-
-            // Undo resource yield buff - restore exact original value
-            if (clearYield && state.ResourceYieldMul != 1f && em.HasComponent<VampireSpecificAttributes>(character))
-            {
-                var attrs = em.GetComponentData<VampireSpecificAttributes>(character);
-
-                attrs.ResourceYieldModifier._Value = state.BaseResourceYield;
-
-                em.SetComponentData(character, attrs);
-            }
-        }
-
-        // --- Convenience helpers / back-compat ---
-
-        public static void ApplyAttackSpeedBuff(EntityManager em, Entity character, float bonus)
-        {
-            ApplyBuffs(em, character, bonus, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f);
-        }
-
-        public static void ClearAttackSpeedBuff(EntityManager em, Entity character)
-        {
-            Clear(em, character);
         }
 
         public static bool HasBuff(Entity character)
