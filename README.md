@@ -161,6 +161,9 @@ The timer also applies when:
 - Restart the server after editing config
 - Check BepInEx logs for errors
 
+## Credits
+
+Special thanks to the hellsing community for testing the mod to make sure it works smoothly, further thanks goes to Odjit for the guidance and help with the mod.
 ## License
 
 MIT License - Feel free to modify and redistribute.
