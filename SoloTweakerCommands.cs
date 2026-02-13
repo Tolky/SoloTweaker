@@ -139,7 +139,7 @@ namespace SoloTweaker
             string msg = "[SoloTweaker] Debug Info:\n";
 
             // Check if character has buff
-            bool hasBuff = SoloStatBoostService.HasBuff(character);
+            bool hasBuff = BuffService.HasBuff(character);
             msg += $"Has SoloTweaker Buff: {hasBuff}\n\n";
 
             // Check if LifeLeech component exists

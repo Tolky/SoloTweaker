@@ -9,18 +9,7 @@ namespace SoloTweaker
 {
     internal static class SoloBuffLogic
     {
-
-        private static float AttackSpeedBonus    => Plugin.SoloAttackSpeedPercent.Value;
-        private static float PhysicalDamageBonus => Plugin.SoloDamagePercent.Value;
-        private static float SpellDamageBonus    => Plugin.SoloSpellDamagePercent.Value;
-        private static float HealthPercentBonus  => Plugin.SoloHealthPercent.Value;
-        private static float MoveSpeedPercent    => Plugin.SoloMoveSpeedPercent.Value;
-        private static float CritChanceBonus     => Plugin.SoloCritChancePercent.Value;
-        private static float CritDamageBonus     => Plugin.SoloCritDamagePercent.Value;
-        private static float PhysicalLeechBonus  => Plugin.SoloPhysicalLeechPercent.Value;
-        private static float SpellLeechBonus     => Plugin.SoloSpellLeechPercent.Value;
-        private static float ResourceYieldBonus  => Plugin.SoloResourceYieldPercent.Value;
-        private static int   ClanOfflineThresholdMinutes => Plugin.SoloClanOfflineThresholdMinutes.Value;
+        private static int ClanOfflineThresholdMinutes => Plugin.SoloClanOfflineThresholdMinutes.Value;
 
 
 
@@ -201,7 +190,7 @@ namespace SoloTweaker
                 var charEntity = user.LocalCharacter._Entity;
                 if (charEntity != Entity.Null && em.Exists(charEntity))
                 {
-                    SoloStatBoostService.Clear(em, charEntity);
+                    BuffService.RemoveBuff(charEntity);
                     _buffedCharacters.Remove(charEntity);
                 }
                 return;
@@ -213,7 +202,7 @@ namespace SoloTweaker
                 var charEntity = user.LocalCharacter._Entity;
                 if (charEntity != Entity.Null && em.Exists(charEntity))
                 {
-                    SoloStatBoostService.Clear(em, charEntity);
+                    BuffService.RemoveBuff(charEntity);
                     _buffedCharacters.Remove(charEntity);
                 }
                 return;
@@ -227,26 +216,13 @@ namespace SoloTweaker
 
             if (isSolo)
             {
-                SoloStatBoostService.ApplyBuffs(
-                    em,
-                    character,
-                    AttackSpeedBonus,      // 0.10 = +10% attack speed
-                    PhysicalDamageBonus,   // 0.10 = +10% physical damage
-                    SpellDamageBonus,      // 0.10 = +10% spell damage
-                    HealthPercentBonus,    // 0.10 = +10% max HP
-                    MoveSpeedPercent,      // 0.10 = +10% move speed
-                    CritChanceBonus,       // 0.10 = +10% crit chance
-                    CritDamageBonus,       // 0.10 = +10% crit damage
-                    PhysicalLeechBonus,    // 0.10 = +10% physical leech
-                    SpellLeechBonus,       // 0.10 = +10% spell leech
-                    ResourceYieldBonus     // 0.10 = +10% resource yield
-                );
+                BuffService.ApplyBuff(userEntity, character);
 
                 _buffedCharacters.Add(character);
             }
             else if (_buffedCharacters.Contains(character))
             {
-                SoloStatBoostService.Clear(em, character);
+                BuffService.RemoveBuff(character);
                 _buffedCharacters.Remove(character);
             }
         }
@@ -342,7 +318,7 @@ namespace SoloTweaker
 
             var optedOut = IsUserOptedOut(em, userEntity);
 
-            hasSoloBuff = _buffedCharacters.Contains(charEntity) && SoloStatBoostService.HasBuff(charEntity);
+            hasSoloBuff = _buffedCharacters.Contains(charEntity) && BuffService.HasBuff(charEntity);
 
             if (optedOut)
             {
@@ -706,8 +682,8 @@ namespace SoloTweaker
 
             if (charEntity != Entity.Null && em.Exists(charEntity))
             {
-            SoloStatBoostService.Clear(em, charEntity);
-            _buffedCharacters.Remove(charEntity);
+                BuffService.RemoveBuff(charEntity);
+                _buffedCharacters.Remove(charEntity);
             }
         }
 
@@ -730,7 +706,7 @@ namespace SoloTweaker
             {
                 if (em.Exists(character))
                 {
-                    SoloStatBoostService.Clear(em, character);
+                    BuffService.RemoveBuff(character);
                 }
             }
 
