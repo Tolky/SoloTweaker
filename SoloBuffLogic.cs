@@ -25,6 +25,7 @@ namespace SoloTweaker
 
 
         private static World? _serverWorld;
+        private static EntityQuery? _userQuery;
         private static readonly HashSet<Entity> _buffedCharacters = new();
         private static readonly HashSet<Entity> _optOutUsers      = new();
 
@@ -58,6 +59,12 @@ namespace SoloTweaker
             return _serverWorld!;
         }
 
+        private static EntityQuery GetUserQuery(EntityManager em)
+        {
+            if (_userQuery == null)
+                _userQuery = em.CreateEntityQuery(ComponentType.ReadOnly<User>());
+            return _userQuery.Value;
+        }
 
         public static void UpdateSoloBuffs()
         {
@@ -66,17 +73,7 @@ namespace SoloTweaker
                 return;
 
             var em = serverWorld.EntityManager;
-
-            var desc = new EntityQueryDesc
-            {
-                All = new[]
-                {
-                    ComponentType.ReadOnly<User>()
-                }
-            };
-
-            var query = em.CreateEntityQuery(desc);
-            var users = query.ToEntityArray(Allocator.Temp);
+            var users = GetUserQuery(em).ToEntityArray(Allocator.Temp);
 
             // Track disconnect times and clan changes - use indexed for loop to avoid enumerator disposal
             for (int i = 0; i < users.Length; i++)
@@ -423,16 +420,7 @@ namespace SoloTweaker
                 }
             }
 
-            var queryDesc = new EntityQueryDesc
-            {
-                All = new[]
-                {
-                    ComponentType.ReadOnly<User>()
-                }
-            };
-
-            var query = em.CreateEntityQuery(queryDesc);
-            var users = query.ToEntityArray(Allocator.Temp);
+            var users = GetUserQuery(em).ToEntityArray(Allocator.Temp);
 
             bool otherRecentOrOnline = false;
 
@@ -529,16 +517,7 @@ namespace SoloTweaker
             if (clanEntity == Entity.Null || !em.Exists(clanEntity))
                 return;
 
-            var queryDesc = new EntityQueryDesc
-            {
-                All = new[]
-                {
-                    ComponentType.ReadOnly<User>()
-                }
-            };
-
-            var query = em.CreateEntityQuery(queryDesc);
-            var users = query.ToEntityArray(Allocator.Temp);
+            var users = GetUserQuery(em).ToEntityArray(Allocator.Temp);
 
             try
             {
@@ -582,16 +561,7 @@ namespace SoloTweaker
             TimeSpan threshold = TimeSpan.FromMinutes(minutes);
             DateTime nowUtc = DateTime.UtcNow;
 
-            var queryDesc = new EntityQueryDesc
-            {
-                All = new[]
-                {
-                    ComponentType.ReadOnly<User>()
-                }
-            };
-
-            var query = em.CreateEntityQuery(queryDesc);
-            var users = query.ToEntityArray(Allocator.Temp);
+            var users = GetUserQuery(em).ToEntityArray(Allocator.Temp);
 
             bool otherOnline = false;
             TimeSpan maxRemaining = TimeSpan.Zero;
