@@ -1,14 +1,13 @@
-﻿using System;
-using System.Runtime.CompilerServices;
+using System;
+using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
-using BepInEx.Core.Logging.Interpolation;
-using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
+using HarmonyLib;
 using Il2CppInterop.Runtime.Injection;
 using UnityEngine;
 using VampireCommandFramework;
-//plugin
+
 namespace SoloTweaker
 {
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
@@ -20,6 +19,9 @@ namespace SoloTweaker
         public const string PluginVersion = "2.2.0";
 
         internal static Plugin? Instance;
+
+        Harmony? _harmony;
+        GameObject? _behaviourGo;
 
         // Combat Stats
         internal static ConfigEntry<float> SoloAttackSpeedPercent = null!;
@@ -40,36 +42,48 @@ namespace SoloTweaker
         // Clan Settings
         internal static ConfigEntry<int> SoloClanOfflineThresholdMinutes = null!;
 
-
         public override void Load()
         {
             Instance = this;
             BindConfig();
+
+            _harmony = new Harmony(PluginGuid);
+            _harmony.PatchAll(Assembly.GetExecutingAssembly());
 
             if (!ClassInjector.IsTypeRegisteredInIl2Cpp<SoloTweakerBehaviour>())
             {
                 ClassInjector.RegisterTypeInIl2Cpp<SoloTweakerBehaviour>();
             }
 
-            var go = new GameObject("SoloTweakerBehaviour");
-            UnityEngine.Object.DontDestroyOnLoad(go);
-            go.hideFlags = HideFlags.HideAndDontSave;
-            go.AddComponent<SoloTweakerBehaviour>();
+            _behaviourGo = new GameObject("SoloTweakerBehaviour");
+            UnityEngine.Object.DontDestroyOnLoad(_behaviourGo);
+            _behaviourGo.hideFlags = HideFlags.HideAndDontSave;
+            _behaviourGo.AddComponent<SoloTweakerBehaviour>();
 
             CommandRegistry.RegisterAll();
 
-            bool enabled;
-            var handler = new BepInExInfoLogInterpolatedStringHandler(11, 2, out enabled);
-            if (enabled)
-            {
-                handler.AppendLiteral("[");
-                handler.AppendFormatted(PluginName);
-                handler.AppendLiteral("] ");
-                handler.AppendFormatted(PluginVersion);
-                handler.AppendLiteral(" loaded.");
-            }
-            Log.LogInfo(handler);
+            Log.LogInfo($"[{PluginName}] {PluginVersion} loaded.");
+        }
 
+        public override bool Unload()
+        {
+            SoloBuffLogic.ClearAllBuffs();
+            SoloBuffLogic.Reset();
+
+            if (_behaviourGo != null)
+            {
+                UnityEngine.Object.Destroy(_behaviourGo);
+                _behaviourGo = null;
+            }
+
+            _harmony?.UnpatchSelf();
+            _harmony = null;
+
+            CommandRegistry.UnregisterAssembly(Assembly.GetExecutingAssembly());
+
+            Instance = null;
+            Log.LogInfo($"[{PluginName}] unloaded.");
+            return true;
         }
 
         private void BindConfig()

@@ -713,5 +713,17 @@ namespace SoloTweaker
             _buffedCharacters.Clear();
         }
 
+        internal static void Reset()
+        {
+            _serverWorld = null;
+            _userQuery = null;
+            _buffedCharacters.Clear();
+            _optOutUsers.Clear();
+            _userDisconnectTimes.Clear();
+            _userClanLeaveTimes.Clear();
+            _userLastClan.Clear();
+            _clanMemberDepartureTimes.Clear();
+        }
+
     }
 }
