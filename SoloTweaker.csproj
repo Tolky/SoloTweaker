@@ -92,11 +92,22 @@
     <Reference Include="VampireCommandFramework">
       <HintPath>$(PluginsDir)\VampireCommandFramework.dll</HintPath>
     </Reference>
+
+    <!-- HookDOTS -->
+    <Reference Include="HookDOTS.API">
+      <HintPath>HookDOTS.API.dll</HintPath>
+    </Reference>
+
+    <!-- Clan systems -->
+    <Reference Include="ProjectM.Misc.Systems">
+      <HintPath>$(InteropDir)\ProjectM.Misc.Systems.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
-  <!-- Copy built DLL into BepInEx\plugins\SoloTweaker -->
+  <!-- Copy built DLL + HookDOTS into BepInEx\plugins\SoloTweaker -->
   <Target Name="CopyToBepInEx" AfterTargets="Build" Condition="Exists('$(PluginsDir)')">
     <MakeDir Directories="$(PluginsDir)\$(AssemblyName)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(PluginsDir)\$(AssemblyName)\$(AssemblyName).dll" />
+    <Copy SourceFiles="$(TargetDir)HookDOTS.API.dll" DestinationFolder="$(PluginsDir)\$(AssemblyName)" />
   </Target>
 </Project>
