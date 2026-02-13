@@ -574,6 +574,16 @@ namespace SoloTweaker
             _buffedCharacters.Clear();
         }
 
+        /// <summary>
+        /// Re-populate stat buffers on all currently buffed characters.
+        /// Used by config reload — no destroy/recreate, just updates values.
+        /// </summary>
+        internal static void RefreshAllBuffs()
+        {
+            foreach (var character in _buffedCharacters)
+                BuffService.RefreshBuff(character);
+        }
+
         internal static void Reset()
         {
             _serverWorld = null;
