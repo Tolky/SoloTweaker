@@ -32,6 +32,7 @@ internal static class BuffService
             return false;
 
         ConfigurePermanentBuff(buffEntity);
+        PopulateStatBuffer(buffEntity);
         return true;
     }
 
