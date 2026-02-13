@@ -124,14 +124,14 @@ namespace SoloTweaker
             SoloPhysicalResistancePercent = Config.Bind(
                 "2. Survivability",
                 "PhysicalResistancePercent",
-                0.15f,
-                "Physical damage reduction when solo (0.15 = 15% less physical damage taken). Set to 0 to disable.");
+                0.10f,
+                "Physical damage reduction when solo (0.10 = 10% less physical damage taken). Set to 0 to disable.");
 
             SoloSpellResistancePercent = Config.Bind(
                 "2. Survivability",
                 "SpellResistancePercent",
-                0.15f,
-                "Spell damage reduction when solo (0.15 = 15% less spell damage taken). Set to 0 to disable.");
+                0.10f,
+                "Spell damage reduction when solo (0.10 = 10% less spell damage taken). Set to 0 to disable.");
 
             // ===== MOBILITY & UTILITY =====
             SoloMoveSpeedPercent = Config.Bind(
