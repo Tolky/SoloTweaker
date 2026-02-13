@@ -8,7 +8,7 @@
     <RootNamespace>SoloTweaker</RootNamespace>
 
     <!-- Adjust these if your server lives elsewhere -->
-    <GameDir>C:\Program Files (x86)\Steam\steamapps\common\VRisingDedicatedServer</GameDir>
+    <GameDir>E:\SteamLibrary\steamapps\common\VRising</GameDir>
     <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
 
     <!-- Convenience aliases -->
