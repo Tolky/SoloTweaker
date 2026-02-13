@@ -56,22 +56,6 @@ internal static class BuffService
         return BuffUtility.TryGetBuff(world.EntityManager, character, CarrierBuff, out _);
     }
 
-    /// <summary>
-    /// Re-populate stat buffer on an existing buff without destroying it.
-    /// Used by config reload to update values instantly.
-    /// </summary>
-    public static bool RefreshBuff(Entity character)
-    {
-        var world = SoloBuffLogic.GetServerWorld();
-        if (world == null || !world.IsCreated) return false;
-
-        if (!BuffUtility.TryGetBuff(world.EntityManager, character, CarrierBuff, out Entity buffEntity))
-            return false;
-
-        PopulateStatBuffer(buffEntity);
-        return true;
-    }
-
     internal static void ConfigurePermanentBuff(Entity buffEntity)
     {
         if (buffEntity.Has<CreateGameplayEventsOnSpawn>())

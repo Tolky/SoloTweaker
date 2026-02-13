@@ -575,13 +575,23 @@ namespace SoloTweaker
         }
 
         /// <summary>
-        /// Re-populate stat buffers on all currently buffed characters.
-        /// Used by config reload — no destroy/recreate, just updates values.
+        /// Clear all buffs and schedule reapply on next tick.
+        /// Two-frame approach avoids timing issue where destroyed buff
+        /// entity still exists when ApplyBuff checks.
         /// </summary>
-        internal static void RefreshAllBuffs()
+        private static bool _pendingRefresh;
+
+        internal static void RequestRefresh()
         {
-            foreach (var character in _buffedCharacters)
-                BuffService.RefreshBuff(character);
+            ClearAllBuffs();
+            _pendingRefresh = true;
+        }
+
+        internal static bool ConsumePendingRefresh()
+        {
+            if (!_pendingRefresh) return false;
+            _pendingRefresh = false;
+            return true;
         }
 
         internal static void Reset()

@@ -29,6 +29,14 @@ public static class ConnectionEventPatches
             var world = SoloBuffLogic.GetServerWorld();
             if (world == null || !world.IsCreated) return;
 
+            // Deferred refresh from config reload (buffs cleared last tick, now safe to reapply)
+            if (SoloBuffLogic.ConsumePendingRefresh())
+            {
+                SoloBuffLogic.UpdateSoloBuffs();
+                ScheduleNextExpiry();
+                return;
+            }
+
             var em = world.EntityManager;
 
             if (_connectQuery == default)
