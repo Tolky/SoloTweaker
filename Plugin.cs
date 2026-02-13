@@ -2,7 +2,6 @@ using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Unity.IL2CPP;
-using HarmonyLib;
 using VampireCommandFramework;
 
 namespace SoloTweaker
@@ -17,7 +16,7 @@ namespace SoloTweaker
 
         internal static Plugin? Instance;
 
-        Harmony? _harmony;
+        HookDOTS.API.HookDOTS? _hookDots;
 
         // Combat Stats
         internal static ConfigEntry<float> SoloAttackSpeedPercent = null!;
@@ -43,10 +42,10 @@ namespace SoloTweaker
             Instance = this;
             BindConfig();
 
-            _harmony = new Harmony(PluginGuid);
-            _harmony.PatchAll(Assembly.GetExecutingAssembly());
-
             CommandRegistry.RegisterAll();
+
+            _hookDots = new HookDOTS.API.HookDOTS(PluginGuid, Log);
+            _hookDots.RegisterAnnotatedHooks();
 
             Log.LogInfo($"[{PluginName}] {PluginVersion} loaded.");
         }
@@ -55,10 +54,11 @@ namespace SoloTweaker
         {
             SoloBuffLogic.ClearAllBuffs();
             SoloBuffLogic.Reset();
-            Patches.ConnectionPatches.Reset();
+            Patches.ConnectionEventPatches.Reset();
+            Patches.ClanEventPatches.Reset();
 
-            _harmony?.UnpatchSelf();
-            _harmony = null;
+            _hookDots?.Dispose();
+            _hookDots = null;
 
             CommandRegistry.UnregisterAssembly(Assembly.GetExecutingAssembly());
 
