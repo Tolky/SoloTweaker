@@ -84,58 +84,46 @@ internal static class BuffService
         var buf = em.AddBuffer<ModifyUnitStatBuff_DOTS>(buffEntity);
         buf.Clear();
 
-        float atkSpd = Plugin.SoloAttackSpeedPercent.Value;
-        float dmg    = Plugin.SoloDamagePercent.Value;
-        float spell  = Plugin.SoloSpellDamagePercent.Value;
-        float crit   = Plugin.SoloCritChancePercent.Value;
-        float critD  = Plugin.SoloCritDamagePercent.Value;
-        float hp     = Plugin.SoloHealthPercent.Value;
-        float pLeech = Plugin.SoloPhysicalLeechPercent.Value;
-        float sLeech = Plugin.SoloSpellLeechPercent.Value;
-        float pRes   = Plugin.SoloPhysicalResistancePercent.Value;
-        float sRes   = Plugin.SoloSpellResistancePercent.Value;
-        float move   = Plugin.SoloMoveSpeedPercent.Value;
-        float res    = Plugin.SoloResourceYieldPercent.Value;
-
         // Attack speed
-        if (atkSpd != 0f)
-        {
-            AddMul(buf, UnitStatType.PrimaryAttackSpeed, 1f + atkSpd);
-            AddMul(buf, UnitStatType.AbilityAttackSpeed, 1f + atkSpd);
-        }
+        AddStat(buf, UnitStatType.PrimaryAttackSpeed,  Plugin.SoloAttackSpeedPercent.Value, Plugin.SoloAttackSpeedType.Value);
+        AddStat(buf, UnitStatType.AbilityAttackSpeed,  Plugin.SoloAttackSpeedPercent.Value, Plugin.SoloAttackSpeedType.Value);
 
         // Damage
-        if (dmg != 0f) AddMul(buf, UnitStatType.PhysicalPower, 1f + dmg);
-        if (spell != 0f) AddMul(buf, UnitStatType.SpellPower, 1f + spell);
+        AddStat(buf, UnitStatType.PhysicalPower, Plugin.SoloDamagePercent.Value,      Plugin.SoloDamageType.Value);
+        AddStat(buf, UnitStatType.SpellPower,    Plugin.SoloSpellDamagePercent.Value,  Plugin.SoloSpellDamageType.Value);
 
         // Crit
-        if (crit != 0f)
-        {
-            AddMul(buf, UnitStatType.PhysicalCriticalStrikeChance, 1f + crit);
-            AddMul(buf, UnitStatType.SpellCriticalStrikeChance, 1f + crit);
-        }
-        if (critD != 0f)
-        {
-            AddMul(buf, UnitStatType.PhysicalCriticalStrikeDamage, 1f + critD);
-            AddMul(buf, UnitStatType.SpellCriticalStrikeDamage, 1f + critD);
-        }
+        AddStat(buf, UnitStatType.PhysicalCriticalStrikeChance, Plugin.SoloCritChancePercent.Value, Plugin.SoloCritChanceType.Value);
+        AddStat(buf, UnitStatType.SpellCriticalStrikeChance,    Plugin.SoloCritChancePercent.Value, Plugin.SoloCritChanceType.Value);
+        AddStat(buf, UnitStatType.PhysicalCriticalStrikeDamage, Plugin.SoloCritDamagePercent.Value, Plugin.SoloCritDamageType.Value);
+        AddStat(buf, UnitStatType.SpellCriticalStrikeDamage,    Plugin.SoloCritDamagePercent.Value, Plugin.SoloCritDamageType.Value);
 
         // Health
-        if (hp != 0f) AddMul(buf, UnitStatType.MaxHealth, 1f + hp);
+        AddStat(buf, UnitStatType.MaxHealth, Plugin.SoloHealthPercent.Value, Plugin.SoloHealthType.Value);
 
-        // Leech (additive, not multiplicative)
-        if (pLeech != 0f) AddFlat(buf, UnitStatType.PhysicalLifeLeech, pLeech);
-        if (sLeech != 0f) AddFlat(buf, UnitStatType.SpellLifeLeech, sLeech);
+        // Leech
+        AddStat(buf, UnitStatType.PhysicalLifeLeech, Plugin.SoloPhysicalLeechPercent.Value, Plugin.SoloPhysicalLeechType.Value);
+        AddStat(buf, UnitStatType.SpellLifeLeech,    Plugin.SoloSpellLeechPercent.Value,    Plugin.SoloSpellLeechType.Value);
 
-        // Damage reduction (additive: 0.15 = 15% less damage taken)
-        if (pRes != 0f) AddFlat(buf, UnitStatType.PhysicalResistance, pRes);
-        if (sRes != 0f) AddFlat(buf, UnitStatType.SpellResistance, sRes);
+        // Damage reduction
+        AddStat(buf, UnitStatType.PhysicalResistance, Plugin.SoloPhysicalResistancePercent.Value, Plugin.SoloPhysicalResistanceType.Value);
+        AddStat(buf, UnitStatType.SpellResistance,    Plugin.SoloSpellResistancePercent.Value,    Plugin.SoloSpellResistanceType.Value);
 
         // Movement
-        if (move != 0f) AddMul(buf, UnitStatType.MovementSpeed, 1f + move);
+        AddStat(buf, UnitStatType.MovementSpeed, Plugin.SoloMoveSpeedPercent.Value, Plugin.SoloMoveSpeedType.Value);
 
         // Resource yield
-        if (res != 0f) AddMul(buf, UnitStatType.ResourceYield, 1f + res);
+        AddStat(buf, UnitStatType.ResourceYield, Plugin.SoloResourceYieldPercent.Value, Plugin.SoloResourceYieldType.Value);
+    }
+
+    static void AddStat(DynamicBuffer<ModifyUnitStatBuff_DOTS> buf, UnitStatType stat, float value, int type)
+    {
+        if (value == 0f) return;
+
+        if (type == 1)
+            AddFlat(buf, stat, value);
+        else
+            AddMul(buf, stat, 1f + value);
     }
 
     static void AddMul(DynamicBuffer<ModifyUnitStatBuff_DOTS> buf, UnitStatType stat, float value)

@@ -20,21 +20,33 @@ namespace SoloTweaker
 
         // Combat Stats
         internal static ConfigEntry<float> SoloAttackSpeedPercent = null!;
+        internal static ConfigEntry<int>   SoloAttackSpeedType    = null!;
         internal static ConfigEntry<float> SoloDamagePercent      = null!;
+        internal static ConfigEntry<int>   SoloDamageType         = null!;
         internal static ConfigEntry<float> SoloSpellDamagePercent = null!;
+        internal static ConfigEntry<int>   SoloSpellDamageType    = null!;
         internal static ConfigEntry<float> SoloCritChancePercent  = null!;
+        internal static ConfigEntry<int>   SoloCritChanceType     = null!;
         internal static ConfigEntry<float> SoloCritDamagePercent  = null!;
+        internal static ConfigEntry<int>   SoloCritDamageType     = null!;
 
         // Survivability
         internal static ConfigEntry<float> SoloHealthPercent              = null!;
+        internal static ConfigEntry<int>   SoloHealthType                 = null!;
         internal static ConfigEntry<float> SoloPhysicalLeechPercent       = null!;
+        internal static ConfigEntry<int>   SoloPhysicalLeechType          = null!;
         internal static ConfigEntry<float> SoloSpellLeechPercent          = null!;
+        internal static ConfigEntry<int>   SoloSpellLeechType             = null!;
         internal static ConfigEntry<float> SoloPhysicalResistancePercent  = null!;
+        internal static ConfigEntry<int>   SoloPhysicalResistanceType     = null!;
         internal static ConfigEntry<float> SoloSpellResistancePercent     = null!;
+        internal static ConfigEntry<int>   SoloSpellResistanceType        = null!;
 
         // Mobility & Utility
         internal static ConfigEntry<float> SoloMoveSpeedPercent     = null!;
+        internal static ConfigEntry<int>   SoloMoveSpeedType        = null!;
         internal static ConfigEntry<float> SoloResourceYieldPercent = null!;
+        internal static ConfigEntry<int>   SoloResourceYieldType    = null!;
 
         // Clan Settings
         internal static ConfigEntry<int> SoloClanOfflineThresholdMinutes = null!;
@@ -71,80 +83,82 @@ namespace SoloTweaker
 
         private void BindConfig()
         {
+            const string typeDesc = "Modification type: 0 = Multiply (scales with gear), 1 = Add (flat value).";
+
             // ===== COMBAT STATS =====
             SoloAttackSpeedPercent = Config.Bind(
-                "1. Combat Stats",
-                "AttackSpeedPercent",
-                0.10f,
-                "Attack speed bonus when solo (0.10 = +10% attack speed). Set to 0 to disable.");
+                "1. Combat Stats", "AttackSpeedValue", 0.10f,
+                "Attack speed bonus when solo. Multiply: 0.10 = +10%. Add: 0.10 = +0.10 flat. Set to 0 to disable.");
+            SoloAttackSpeedType = Config.Bind(
+                "1. Combat Stats", "AttackSpeedType", 0, typeDesc);
 
             SoloDamagePercent = Config.Bind(
-                "1. Combat Stats",
-                "PhysicalDamagePercent",
-                0.10f,
-                "Physical damage bonus when solo (0.10 = +10% physical power). Set to 0 to disable.");
+                "1. Combat Stats", "PhysicalDamageValue", 0.10f,
+                "Physical damage bonus when solo. Multiply: 0.10 = +10%. Add: 0.10 = +0.10 flat. Set to 0 to disable.");
+            SoloDamageType = Config.Bind(
+                "1. Combat Stats", "PhysicalDamageType", 0, typeDesc);
 
             SoloSpellDamagePercent = Config.Bind(
-                "1. Combat Stats",
-                "SpellDamagePercent",
-                0.10f,
-                "Spell damage bonus when solo (0.10 = +10% spell power). Set to 0 to disable.");
+                "1. Combat Stats", "SpellDamageValue", 0.10f,
+                "Spell damage bonus when solo. Multiply: 0.10 = +10%. Add: 0.10 = +0.10 flat. Set to 0 to disable.");
+            SoloSpellDamageType = Config.Bind(
+                "1. Combat Stats", "SpellDamageType", 0, typeDesc);
 
             SoloCritChancePercent = Config.Bind(
-                "1. Combat Stats",
-                "CritChancePercent",
-                0.10f,
-                "Critical strike chance multiplier when solo (0.10 = 10% more crit chance for both physical and spells, e.g., 50% base becomes 55%). Set to 0 to disable.");
+                "1. Combat Stats", "CritChanceValue", 0.10f,
+                "Crit chance bonus when solo (physical + spell). Multiply: 0.10 = +10%. Add: 0.10 = +0.10 flat. Set to 0 to disable.");
+            SoloCritChanceType = Config.Bind(
+                "1. Combat Stats", "CritChanceType", 0, typeDesc);
 
             SoloCritDamagePercent = Config.Bind(
-                "1. Combat Stats",
-                "CritDamagePercent",
-                0.10f,
-                "Critical strike damage multiplier when solo (0.10 = 10% more crit damage for both physical and spells). Set to 0 to disable.");
+                "1. Combat Stats", "CritDamageValue", 0.10f,
+                "Crit damage bonus when solo (physical + spell). Multiply: 0.10 = +10%. Add: 0.10 = +0.10 flat. Set to 0 to disable.");
+            SoloCritDamageType = Config.Bind(
+                "1. Combat Stats", "CritDamageType", 0, typeDesc);
 
             // ===== SURVIVABILITY =====
             SoloHealthPercent = Config.Bind(
-                "2. Survivability",
-                "HealthPercent",
-                0.10f,
-                "Max health bonus when solo (0.10 = +10% max HP). Set to 0 to disable.");
+                "2. Survivability", "HealthValue", 0.10f,
+                "Max health bonus when solo. Multiply: 0.10 = +10%. Add: 100 = +100 flat HP. Set to 0 to disable.");
+            SoloHealthType = Config.Bind(
+                "2. Survivability", "HealthType", 0, typeDesc);
 
             SoloPhysicalLeechPercent = Config.Bind(
-                "2. Survivability",
-                "PhysicalLeechPercent",
-                0.10f,
-                "Physical lifesteal when solo (0.10 = 10% lifesteal on basic attacks and physical abilities). Set to 0 to disable.");
+                "2. Survivability", "PhysicalLeechValue", 0.10f,
+                "Physical lifesteal when solo. Set to 0 to disable.");
+            SoloPhysicalLeechType = Config.Bind(
+                "2. Survivability", "PhysicalLeechType", 1, typeDesc);
 
             SoloSpellLeechPercent = Config.Bind(
-                "2. Survivability",
-                "SpellLeechPercent",
-                0.10f,
-                "Spell lifesteal when solo (0.10 = 10% lifesteal on spells). Set to 0 to disable.");
+                "2. Survivability", "SpellLeechValue", 0.10f,
+                "Spell lifesteal when solo. Set to 0 to disable.");
+            SoloSpellLeechType = Config.Bind(
+                "2. Survivability", "SpellLeechType", 1, typeDesc);
 
             SoloPhysicalResistancePercent = Config.Bind(
-                "2. Survivability",
-                "PhysicalResistancePercent",
-                0.10f,
-                "Physical damage reduction when solo (0.10 = 10% less physical damage taken). Set to 0 to disable.");
+                "2. Survivability", "PhysicalResistanceValue", 0.10f,
+                "Physical damage reduction when solo. Set to 0 to disable.");
+            SoloPhysicalResistanceType = Config.Bind(
+                "2. Survivability", "PhysicalResistanceType", 1, typeDesc);
 
             SoloSpellResistancePercent = Config.Bind(
-                "2. Survivability",
-                "SpellResistancePercent",
-                0.10f,
-                "Spell damage reduction when solo (0.10 = 10% less spell damage taken). Set to 0 to disable.");
+                "2. Survivability", "SpellResistanceValue", 0.10f,
+                "Spell damage reduction when solo. Set to 0 to disable.");
+            SoloSpellResistanceType = Config.Bind(
+                "2. Survivability", "SpellResistanceType", 1, typeDesc);
 
             // ===== MOBILITY & UTILITY =====
             SoloMoveSpeedPercent = Config.Bind(
-                "3. Mobility & Utility",
-                "MoveSpeedPercent",
-                0.10f,
-                "Move speed bonus when solo (0.10 = +10% move speed). Set to 0 to disable.");
+                "3. Mobility & Utility", "MoveSpeedValue", 0.10f,
+                "Move speed bonus when solo. Multiply: 0.10 = +10%. Add: 0.50 = +0.50 flat. Set to 0 to disable.");
+            SoloMoveSpeedType = Config.Bind(
+                "3. Mobility & Utility", "MoveSpeedType", 0, typeDesc);
 
             SoloResourceYieldPercent = Config.Bind(
-                "3. Mobility & Utility",
-                "ResourceYieldPercent",
-                0.10f,
-                "Resource gathering bonus when solo (0.10 = +10% more resources from gathering). Set to 0 to disable.");
+                "3. Mobility & Utility", "ResourceYieldValue", 0.10f,
+                "Resource gathering bonus when solo. Multiply: 0.10 = +10%. Add: 0.10 = +0.10 flat. Set to 0 to disable.");
+            SoloResourceYieldType = Config.Bind(
+                "3. Mobility & Utility", "ResourceYieldType", 0, typeDesc);
 
             // ===== CLAN SETTINGS =====
             SoloClanOfflineThresholdMinutes = Config.Bind(
