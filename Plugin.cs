@@ -26,9 +26,11 @@ namespace SoloTweaker
         internal static ConfigEntry<float> SoloCritDamagePercent  = null!;
 
         // Survivability
-        internal static ConfigEntry<float> SoloHealthPercent        = null!;
-        internal static ConfigEntry<float> SoloPhysicalLeechPercent = null!;
-        internal static ConfigEntry<float> SoloSpellLeechPercent    = null!;
+        internal static ConfigEntry<float> SoloHealthPercent              = null!;
+        internal static ConfigEntry<float> SoloPhysicalLeechPercent       = null!;
+        internal static ConfigEntry<float> SoloSpellLeechPercent          = null!;
+        internal static ConfigEntry<float> SoloPhysicalResistancePercent  = null!;
+        internal static ConfigEntry<float> SoloSpellResistancePercent     = null!;
 
         // Mobility & Utility
         internal static ConfigEntry<float> SoloMoveSpeedPercent     = null!;
@@ -118,6 +120,18 @@ namespace SoloTweaker
                 "SpellLeechPercent",
                 0.10f,
                 "Spell lifesteal when solo (0.10 = 10% lifesteal on spells). Set to 0 to disable.");
+
+            SoloPhysicalResistancePercent = Config.Bind(
+                "2. Survivability",
+                "PhysicalResistancePercent",
+                0.15f,
+                "Physical damage reduction when solo (0.15 = 15% less physical damage taken). Set to 0 to disable.");
+
+            SoloSpellResistancePercent = Config.Bind(
+                "2. Survivability",
+                "SpellResistancePercent",
+                0.15f,
+                "Spell damage reduction when solo (0.15 = 15% less spell damage taken). Set to 0 to disable.");
 
             // ===== MOBILITY & UTILITY =====
             SoloMoveSpeedPercent = Config.Bind(

@@ -162,6 +162,7 @@ namespace SoloTweaker
             msg += $"  AtkSpd: {Plugin.SoloAttackSpeedPercent.Value}  Dmg: {Plugin.SoloDamagePercent.Value}  Spell: {Plugin.SoloSpellDamagePercent.Value}\n";
             msg += $"  Crit: {Plugin.SoloCritChancePercent.Value}  CritDmg: {Plugin.SoloCritDamagePercent.Value}  HP: {Plugin.SoloHealthPercent.Value}\n";
             msg += $"  PLeech: {Plugin.SoloPhysicalLeechPercent.Value}  SLeech: {Plugin.SoloSpellLeechPercent.Value}\n";
+            msg += $"  PRes: {Plugin.SoloPhysicalResistancePercent.Value}  SRes: {Plugin.SoloSpellResistancePercent.Value}\n";
             msg += $"  Move: {Plugin.SoloMoveSpeedPercent.Value}  ResYield: {Plugin.SoloResourceYieldPercent.Value}\n";
 
             ctx.Reply(msg);

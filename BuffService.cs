@@ -92,6 +92,8 @@ internal static class BuffService
         float hp     = Plugin.SoloHealthPercent.Value;
         float pLeech = Plugin.SoloPhysicalLeechPercent.Value;
         float sLeech = Plugin.SoloSpellLeechPercent.Value;
+        float pRes   = Plugin.SoloPhysicalResistancePercent.Value;
+        float sRes   = Plugin.SoloSpellResistancePercent.Value;
         float move   = Plugin.SoloMoveSpeedPercent.Value;
         float res    = Plugin.SoloResourceYieldPercent.Value;
 
@@ -124,6 +126,10 @@ internal static class BuffService
         // Leech (additive, not multiplicative)
         if (pLeech != 0f) AddFlat(buf, UnitStatType.PhysicalLifeLeech, pLeech);
         if (sLeech != 0f) AddFlat(buf, UnitStatType.SpellLifeLeech, sLeech);
+
+        // Damage reduction (additive: 0.15 = 15% less damage taken)
+        if (pRes != 0f) AddFlat(buf, UnitStatType.PhysicalResistance, pRes);
+        if (sRes != 0f) AddFlat(buf, UnitStatType.SpellResistance, sRes);
 
         // Movement
         if (move != 0f) AddMul(buf, UnitStatType.MovementSpeed, 1f + move);
