@@ -104,10 +104,9 @@
     </Reference>
   </ItemGroup>
 
-  <!-- Copy built DLL + HookDOTS into BepInEx\plugins\SoloTweaker -->
+  <!-- Copy built DLL into BepInEx\plugins\SoloTweaker -->
   <Target Name="CopyToBepInEx" AfterTargets="Build" Condition="Exists('$(PluginsDir)')">
     <MakeDir Directories="$(PluginsDir)\$(AssemblyName)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(PluginsDir)\$(AssemblyName)\$(AssemblyName).dll" />
-    <Copy SourceFiles="$(TargetDir)HookDOTS.API.dll" DestinationFolder="$(PluginsDir)\$(AssemblyName)" />
   </Target>
 </Project>
