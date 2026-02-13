@@ -1,11 +1,8 @@
-using System;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
-using Il2CppInterop.Runtime.Injection;
-using UnityEngine;
 using VampireCommandFramework;
 
 namespace SoloTweaker
@@ -21,7 +18,6 @@ namespace SoloTweaker
         internal static Plugin? Instance;
 
         Harmony? _harmony;
-        GameObject? _behaviourGo;
 
         // Combat Stats
         internal static ConfigEntry<float> SoloAttackSpeedPercent = null!;
@@ -50,16 +46,6 @@ namespace SoloTweaker
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());
 
-            if (!ClassInjector.IsTypeRegisteredInIl2Cpp<SoloTweakerBehaviour>())
-            {
-                ClassInjector.RegisterTypeInIl2Cpp<SoloTweakerBehaviour>();
-            }
-
-            _behaviourGo = new GameObject("SoloTweakerBehaviour");
-            UnityEngine.Object.DontDestroyOnLoad(_behaviourGo);
-            _behaviourGo.hideFlags = HideFlags.HideAndDontSave;
-            _behaviourGo.AddComponent<SoloTweakerBehaviour>();
-
             CommandRegistry.RegisterAll();
 
             Log.LogInfo($"[{PluginName}] {PluginVersion} loaded.");
@@ -69,12 +55,7 @@ namespace SoloTweaker
         {
             SoloBuffLogic.ClearAllBuffs();
             SoloBuffLogic.Reset();
-
-            if (_behaviourGo != null)
-            {
-                UnityEngine.Object.Destroy(_behaviourGo);
-                _behaviourGo = null;
-            }
+            Patches.ConnectionPatches.Reset();
 
             _harmony?.UnpatchSelf();
             _harmony = null;
