@@ -1,7 +1,7 @@
 using System;
 using ProjectM;
 using ProjectM.Network;
-using ProjectM.Shared;
+using Stunlock.Core;
 using Unity.Entities;
 using VampireCommandFramework;
 
@@ -9,9 +9,11 @@ namespace SoloTweaker
 {
     internal static class SoloTweakerCommands
     {
+        static readonly PrefabGUID CarrierBuff = new(740689171);
+
         [Command(
             "solo",
-            description: "Shows your SoloTweaker solo/buff status and updates your buff.")]
+            description: "Shows your SoloTweaker solo/buff status.")]
         public static void SoloStatus(ChatCommandContext ctx)
         {
             var serverWorld = SoloBuffLogic.GetServerWorld();
@@ -23,8 +25,6 @@ namespace SoloTweaker
 
             EntityManager em = serverWorld.EntityManager;
 
-            // Don't force update - let the automatic update handle buffs
-            // Just show status
             if (!SoloBuffLogic.TryGetStatusForUser(
                     em,
                     ctx.Event.SenderUserEntity,
@@ -44,13 +44,10 @@ namespace SoloTweaker
                 ? "<color=green>BUFF</color>"
                 : "<color=red>NO BUFF</color>";
 
-            string msg =
-                $"[SoloTweaker] Status: {soloStr}, {buffStr}\n" +
-                info;
-
-            ctx.Reply(msg);
+            ctx.Reply($"[SoloTweaker] Status: {soloStr}, {buffStr}\n{info}");
         }
 
+        [Command("soloall", null, null, "Force rescan all players for solo buffs.", null, true)]
         public static void SoloAll(ChatCommandContext ctx)
         {
             var serverWorld = SoloBuffLogic.GetServerWorld();
@@ -77,10 +74,10 @@ namespace SoloTweaker
             Plugin.ReloadConfig();
             ctx.Reply("[SoloTweaker] Config reloaded from disk.");
         }
-        
+
         [Command(
             "soloon",
-            description: "Enable SoloTweaker buffs for yourself (they will apply automatically when you are solo).")]
+            description: "Enable SoloTweaker buffs for yourself.")]
         public static void SoloOn(ChatCommandContext ctx)
         {
             var serverWorld = SoloBuffLogic.GetServerWorld();
@@ -100,7 +97,7 @@ namespace SoloTweaker
 
         [Command(
             "solooff",
-            description: "Disable SoloTweaker buffs for yourself (they will not be applied even if you are solo).")]
+            description: "Disable SoloTweaker buffs for yourself.")]
         public static void SoloOff(ChatCommandContext ctx)
         {
             var serverWorld = SoloBuffLogic.GetServerWorld();
@@ -116,7 +113,7 @@ namespace SoloTweaker
             ctx.Reply("[SoloTweaker] Your solo buffs are now <color=red>DISABLED</color>.");
         }
 
-        [Command("solodebug", null, null, "Debug leech and resource yield values", null, true)]
+        [Command("solodebug", null, null, "Show native buff entity and stat modifiers.", null, true)]
         public static void SoloDebug(ChatCommandContext ctx)
         {
             var serverWorld = SoloBuffLogic.GetServerWorld();
@@ -138,59 +135,34 @@ namespace SoloTweaker
 
             string msg = "[SoloTweaker] Debug Info:\n";
 
-            // Check if character has buff
-            bool hasBuff = BuffService.HasBuff(character);
-            msg += $"Has SoloTweaker Buff: {hasBuff}\n\n";
+            bool hasBuff = BuffUtility.TryGetBuff(em, character, CarrierBuff, out Entity buffEntity);
+            msg += $"Native Buff: {(hasBuff ? "PRESENT" : "ABSENT")}";
+            if (hasBuff) msg += $" (Entity: {buffEntity.Index}:{buffEntity.Version})";
+            msg += "\n";
 
-            // Check if LifeLeech component exists
-            if (em.HasComponent<LifeLeech>(character))
+            // Show stat buffer contents
+            if (hasBuff && em.HasComponent<ModifyUnitStatBuff_DOTS>(buffEntity))
             {
-                var leech = em.GetComponentData<LifeLeech>(character);
-                msg += $"LifeLeech Component Found:\n";
-                msg += $"  PhysicalLifeLeechFactor: {leech.PhysicalLifeLeechFactor._Value}\n";
-                msg += $"  SpellLifeLeechFactor: {leech.SpellLifeLeechFactor._Value}\n";
-                msg += $"  PrimaryLeechFactor: {leech.PrimaryLeechFactor._Value}\n";
+                var buf = em.GetBuffer<ModifyUnitStatBuff_DOTS>(buffEntity);
+                msg += $"Stat Modifiers ({buf.Length}):\n";
+                for (int i = 0; i < buf.Length; i++)
+                {
+                    var entry = buf[i];
+                    string modType = entry.ModificationType == ModificationType.Multiply ? "Mul" : "Add";
+                    msg += $"  {entry.StatType}: {entry.Value:F3} ({modType})\n";
+                }
             }
-            else
+            else if (hasBuff)
             {
-                msg += "LifeLeech Component: NOT FOUND\n";
-            }
-
-            // Check VampireSpecificAttributes (crit, resource yield, etc)
-            if (em.HasComponent<ProjectM.Shared.VampireSpecificAttributes>(character))
-            {
-                var attrs = em.GetComponentData<ProjectM.Shared.VampireSpecificAttributes>(character);
-                msg += $"\nVampireSpecificAttributes:\n";
-                msg += $"  PhysicalCriticalStrikeChance: {attrs.PhysicalCriticalStrikeChance._Value}\n";
-                msg += $"  PhysicalCriticalStrikeDamage: {attrs.PhysicalCriticalStrikeDamage._Value}\n";
-                msg += $"  SpellCriticalStrikeChance: {attrs.SpellCriticalStrikeChance._Value}\n";
-                msg += $"  SpellCriticalStrikeDamage: {attrs.SpellCriticalStrikeDamage._Value}\n";
-                msg += $"  ResourceYieldModifier: {attrs.ResourceYieldModifier._Value}\n";
-            }
-            else
-            {
-                msg += "VampireSpecificAttributes Component: NOT FOUND\n";
+                msg += "Stat Buffer: NOT FOUND on buff entity\n";
             }
 
-            // Show config values and calculated multipliers
-            msg += $"\nConfig Values:\n";
-            msg += $"  CritChancePercent: {Plugin.SoloCritChancePercent.Value}\n";
-            msg += $"  CritDamagePercent: {Plugin.SoloCritDamagePercent.Value}\n";
-            msg += $"  PhysicalLeechPercent: {Plugin.SoloPhysicalLeechPercent.Value}\n";
-            msg += $"  SpellLeechPercent: {Plugin.SoloSpellLeechPercent.Value}\n";
-            msg += $"  ResourceYieldPercent: {Plugin.SoloResourceYieldPercent.Value}\n";
-
-            // Show calculated multipliers
-            float critChanceMul = System.Math.Abs(Plugin.SoloCritChancePercent.Value) > 0.0001f ? 1f + Plugin.SoloCritChancePercent.Value : 1f;
-            msg += $"\nCalculated Multipliers:\n";
-            msg += $"  CritChance Multiplier: {critChanceMul}x (config {Plugin.SoloCritChancePercent.Value} becomes 1 + {Plugin.SoloCritChancePercent.Value} = {critChanceMul})\n";
-
-            float physLeechMul = System.Math.Abs(Plugin.SoloPhysicalLeechPercent.Value) > 0.0001f ? 1f + Plugin.SoloPhysicalLeechPercent.Value : 1f;
-            float spellLeechMul = System.Math.Abs(Plugin.SoloSpellLeechPercent.Value) > 0.0001f ? 1f + Plugin.SoloSpellLeechPercent.Value : 1f;
-
-            msg += $"\nCalculated Multipliers (before clamping):\n";
-            msg += $"  PhysicalLeechMul: {physLeechMul}\n";
-            msg += $"  SpellLeechMul: {spellLeechMul}\n";
+            // Show config values
+            msg += $"\nConfig:\n";
+            msg += $"  AtkSpd: {Plugin.SoloAttackSpeedPercent.Value}  Dmg: {Plugin.SoloDamagePercent.Value}  Spell: {Plugin.SoloSpellDamagePercent.Value}\n";
+            msg += $"  Crit: {Plugin.SoloCritChancePercent.Value}  CritDmg: {Plugin.SoloCritDamagePercent.Value}  HP: {Plugin.SoloHealthPercent.Value}\n";
+            msg += $"  PLeech: {Plugin.SoloPhysicalLeechPercent.Value}  SLeech: {Plugin.SoloSpellLeechPercent.Value}\n";
+            msg += $"  Move: {Plugin.SoloMoveSpeedPercent.Value}  ResYield: {Plugin.SoloResourceYieldPercent.Value}\n";
 
             ctx.Reply(msg);
         }
