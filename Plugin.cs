@@ -177,8 +177,9 @@ namespace SoloTweaker
             Instance.Config.Save();
             Instance.Log.LogInfo("[SoloTweaker] Config reloaded from disk.");
 
-            // Clear all existing buffs so they can be reapplied with new config values
+            // Clear all existing buffs and reapply with new config values
             SoloBuffLogic.ClearAllBuffs();
+            SoloBuffLogic.UpdateSoloBuffs();
         }
     }
 }
