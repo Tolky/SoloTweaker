@@ -26,6 +26,50 @@ namespace SoloTweaker
         // Track when someone left a specific clan (clan entity -> departure time)
         private static readonly Dictionary<Entity, DateTime> _clanMemberDepartureTimes = new();
 
+        /// <summary>
+        /// True when offline-threshold timers are pending (disconnect or clan leave).
+        /// Used by EventPatches to skip periodic scans when no timers are active.
+        /// </summary>
+        internal static bool HasActiveTimers =>
+            _userDisconnectTimes.Count > 0 ||
+            _userClanLeaveTimes.Count > 0 ||
+            _clanMemberDepartureTimes.Count > 0;
+
+        /// <summary>
+        /// Returns seconds until the next offline-threshold timer expires.
+        /// Used by EventPatches to schedule the exact next scan instead of polling.
+        /// Returns float.MaxValue if no timers are active.
+        /// </summary>
+        internal static float GetSecondsUntilNextExpiry()
+        {
+            var minutes = ClanOfflineThresholdMinutes;
+            if (minutes <= 0) return 0f;
+
+            TimeSpan threshold = TimeSpan.FromMinutes(minutes);
+            DateTime nowUtc = DateTime.UtcNow;
+            TimeSpan minRemaining = TimeSpan.MaxValue;
+
+            foreach (var kvp in _userDisconnectTimes)
+            {
+                var remaining = threshold - (nowUtc - kvp.Value);
+                if (remaining < minRemaining) minRemaining = remaining;
+            }
+            foreach (var kvp in _userClanLeaveTimes)
+            {
+                var remaining = threshold - (nowUtc - kvp.Value);
+                if (remaining < minRemaining) minRemaining = remaining;
+            }
+            foreach (var kvp in _clanMemberDepartureTimes)
+            {
+                var remaining = threshold - (nowUtc - kvp.Value);
+                if (remaining < minRemaining) minRemaining = remaining;
+            }
+
+            if (minRemaining == TimeSpan.MaxValue) return float.MaxValue;
+            if (minRemaining <= TimeSpan.Zero) return 0f;
+            return (float)minRemaining.TotalSeconds;
+        }
+
         // Reusable per-tick snapshot: clan -> members
         struct UserSnapshot
         {
