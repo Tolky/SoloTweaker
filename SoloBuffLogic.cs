@@ -801,29 +801,43 @@ namespace SoloTweaker
             catch { }
         }
 
+        static readonly List<Entity> _staleKeys = new();
+
         static void CleanupStaleEntities(EntityManager em)
         {
-            var buffedToRemove = new List<Entity>();
+            _staleKeys.Clear();
             foreach (var e in _buffedCharacters)
-                if (!em.Exists(e)) buffedToRemove.Add(e);
-            foreach (var e in buffedToRemove)
+                if (!em.Exists(e)) _staleKeys.Add(e);
+            foreach (var e in _staleKeys)
                 _buffedCharacters.Remove(e);
 
-            var optOutToRemove = new List<Entity>();
+            _staleKeys.Clear();
             foreach (var e in _optOutUsers)
-                if (!em.Exists(e)) optOutToRemove.Add(e);
-            foreach (var e in optOutToRemove)
+                if (!em.Exists(e)) _staleKeys.Add(e);
+            foreach (var e in _staleKeys)
                 _optOutUsers.Remove(e);
 
-            var keysToRemove = new List<Entity>();
+            _staleKeys.Clear();
+            foreach (var e in _timerNotified)
+                if (!em.Exists(e)) _staleKeys.Add(e);
+            foreach (var e in _staleKeys)
+                _timerNotified.Remove(e);
+
+            _staleKeys.Clear();
             foreach (var kvp in _userDisconnectTimes)
-                if (!em.Exists(kvp.Key)) keysToRemove.Add(kvp.Key);
-            foreach (var key in keysToRemove)
+                if (!em.Exists(kvp.Key)) _staleKeys.Add(kvp.Key);
+            foreach (var key in _staleKeys)
             {
                 _userDisconnectTimes.Remove(key);
                 _userClanLeaveTimes.Remove(key);
                 _userLastClan.Remove(key);
             }
+
+            _staleKeys.Clear();
+            foreach (var kvp in _clanMemberDepartureTimes)
+                if (!em.Exists(kvp.Key)) _staleKeys.Add(kvp.Key);
+            foreach (var key in _staleKeys)
+                _clanMemberDepartureTimes.Remove(key);
         }
     }
 }
