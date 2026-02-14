@@ -276,13 +276,13 @@ namespace SoloTweaker
                 _buffedCharacters.Add(character);
                 _timerNotified.Remove(userEntity);
                 if (!wasBuff)
-                    NotifyPlayer(em, userEntity, "<color=green>[SoloTweaker] Solo buff activated.</color>");
+                    NotifyPlayer(em, userEntity, "<color=green>[SoloTweaker] Solo buffs applied.</color>");
             }
             else if (wasBuff)
             {
                 BuffService.RemoveBuff(character);
                 _buffedCharacters.Remove(character);
-                NotifyPlayer(em, userEntity, "<color=red>[SoloTweaker] You are no longer solo, buff removed.</color>");
+                NotifyPlayer(em, userEntity, "<color=red>[SoloTweaker] Solo buffs removed.</color>");
 
                 // If there's a cooldown timer, notify about it
                 NotifyTimerIfNeeded(em, userEntity, clanEntity);
@@ -673,10 +673,11 @@ namespace SoloTweaker
             var user = em.GetComponentData<User>(userEntity);
             var charEntity = user.LocalCharacter._Entity;
 
-            if (charEntity != Entity.Null && em.Exists(charEntity))
+            if (charEntity != Entity.Null && em.Exists(charEntity) && BuffService.HasBuff(charEntity))
             {
                 BuffService.RemoveBuff(charEntity);
                 _buffedCharacters.Remove(charEntity);
+                NotifyPlayer(em, userEntity, "<color=red>[SoloTweaker] Solo buffs removed.</color>");
             }
         }
 
@@ -780,7 +781,7 @@ namespace SoloTweaker
             {
                 _timerNotified.Add(userEntity);
                 NotifyPlayer(em, userEntity,
-                    $"<color=yellow>[SoloTweaker] Solo buff available in {FormatTimeSpanShort(remaining.Value)}.</color>");
+                    $"<color=yellow>[SoloTweaker] Solo buffs available in {FormatTimeSpanShort(remaining.Value)}.</color>");
             }
         }
 
