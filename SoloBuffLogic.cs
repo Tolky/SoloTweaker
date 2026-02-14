@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using ProjectM;
 using ProjectM.Network;
 using Unity.Collections;
@@ -14,7 +15,8 @@ namespace SoloTweaker
         private static World? _serverWorld;
         private static EntityQuery? _userQuery;
         private static readonly HashSet<Entity> _buffedCharacters = new();
-        private static readonly HashSet<Entity> _optOutUsers      = new();
+        private static readonly HashSet<ulong> _optOutPlatformIds = new();
+        private static bool _optOutsLoaded;
 
         // Track when users disconnect to properly enforce the offline threshold
         private static readonly Dictionary<Entity, DateTime> _userDisconnectTimes = new();
@@ -677,7 +679,11 @@ namespace SoloTweaker
 
         internal static bool IsUserOptedOut(EntityManager em, Entity userEntity)
         {
-            return _optOutUsers.Contains(userEntity);
+            EnsureOptOutsLoaded();
+            if (!em.Exists(userEntity) || !em.HasComponent<User>(userEntity))
+                return false;
+            var user = em.GetComponentData<User>(userEntity);
+            return _optOutPlatformIds.Contains(user.PlatformId);
         }
 
         internal static void SetUserOptOut(EntityManager em, Entity userEntity)
@@ -685,10 +691,10 @@ namespace SoloTweaker
             if (!em.Exists(userEntity) || !em.HasComponent<User>(userEntity))
                 return;
 
-            if (!_optOutUsers.Contains(userEntity))
-                _optOutUsers.Add(userEntity);
-
             var user = em.GetComponentData<User>(userEntity);
+            _optOutPlatformIds.Add(user.PlatformId);
+            SaveOptOuts();
+
             var charEntity = user.LocalCharacter._Entity;
 
             if (charEntity != Entity.Null && em.Exists(charEntity) && BuffService.HasBuff(charEntity))
@@ -701,7 +707,11 @@ namespace SoloTweaker
 
         internal static void SetUserOptIn(EntityManager em, Entity userEntity)
         {
-            _optOutUsers.Remove(userEntity);
+            if (!em.Exists(userEntity) || !em.HasComponent<User>(userEntity))
+                return;
+            var user = em.GetComponentData<User>(userEntity);
+            _optOutPlatformIds.Remove(user.PlatformId);
+            SaveOptOuts();
         }
 
         /// <summary>
@@ -709,7 +719,12 @@ namespace SoloTweaker
         /// </summary>
         internal static bool ToggleUserOptOut(EntityManager em, Entity userEntity)
         {
-            if (_optOutUsers.Contains(userEntity))
+            EnsureOptOutsLoaded();
+            if (!em.Exists(userEntity) || !em.HasComponent<User>(userEntity))
+                return false;
+
+            var user = em.GetComponentData<User>(userEntity);
+            if (_optOutPlatformIds.Contains(user.PlatformId))
             {
                 SetUserOptIn(em, userEntity);
                 return false;
@@ -718,6 +733,44 @@ namespace SoloTweaker
             {
                 SetUserOptOut(em, userEntity);
                 return true;
+            }
+        }
+
+        static string OptOutFilePath =>
+            Path.Combine(BepInEx.Paths.ConfigPath, "SoloTweaker_optout.txt");
+
+        static void EnsureOptOutsLoaded()
+        {
+            if (_optOutsLoaded) return;
+            _optOutsLoaded = true;
+
+            try
+            {
+                if (!File.Exists(OptOutFilePath)) return;
+                foreach (var line in File.ReadAllLines(OptOutFilePath))
+                {
+                    if (ulong.TryParse(line.Trim(), out ulong id))
+                        _optOutPlatformIds.Add(id);
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Instance?.Log.LogWarning($"[SoloTweaker] Failed to load opt-out file: {ex.Message}");
+            }
+        }
+
+        static void SaveOptOuts()
+        {
+            try
+            {
+                var lines = new List<string>(_optOutPlatformIds.Count);
+                foreach (var id in _optOutPlatformIds)
+                    lines.Add(id.ToString());
+                File.WriteAllLines(OptOutFilePath, lines);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Instance?.Log.LogWarning($"[SoloTweaker] Failed to save opt-out file: {ex.Message}");
             }
         }
 
@@ -764,7 +817,8 @@ namespace SoloTweaker
             _serverWorld = null;
             _userQuery = null;
             _buffedCharacters.Clear();
-            _optOutUsers.Clear();
+            _optOutPlatformIds.Clear();
+            _optOutsLoaded = false;
             _userDisconnectTimes.Clear();
             _userClanLeaveTimes.Clear();
             _userLastClan.Clear();
@@ -828,12 +882,6 @@ namespace SoloTweaker
                 if (!em.Exists(e)) _staleKeys.Add(e);
             foreach (var e in _staleKeys)
                 _buffedCharacters.Remove(e);
-
-            _staleKeys.Clear();
-            foreach (var e in _optOutUsers)
-                if (!em.Exists(e)) _staleKeys.Add(e);
-            foreach (var e in _staleKeys)
-                _optOutUsers.Remove(e);
 
             _staleKeys.Clear();
             foreach (var e in _timerNotified)
