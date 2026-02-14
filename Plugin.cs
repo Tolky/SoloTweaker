@@ -12,7 +12,7 @@ namespace SoloTweaker
     {
         public const string PluginGuid    = "solotweaker";
         public const string PluginName    = "SoloTweaker";
-        public const string PluginVersion = "3.0.1";
+        public const string PluginVersion = "3.0.2";
 
         internal static Plugin? Instance;
 
