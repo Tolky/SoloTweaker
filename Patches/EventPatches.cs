@@ -19,7 +19,10 @@ public static class ConnectionEventPatches
     static EntityQuery _connectQuery;
     static EntityQuery _disconnectQuery;
     static float _nextTimerExpiry = float.MaxValue;
+    static float _nextPeriodicScan;
     static float _nextErrorLogTime;
+
+    const float PeriodicScanInterval = 10f; // safety net scan every 10s
 
     [EcsSystemUpdatePostfix(typeof(ServerBootstrapSystem))]
     public static void OnServerBootstrap()
@@ -52,15 +55,23 @@ public static class ConnectionEventPatches
                 return;
             }
 
+            float now = UnityEngine.Time.time;
+
             // Precise timer: fire exactly when the next offline threshold expires
-            if (_nextTimerExpiry < float.MaxValue)
+            if (_nextTimerExpiry < float.MaxValue && now >= _nextTimerExpiry)
             {
-                float now = UnityEngine.Time.time;
-                if (now >= _nextTimerExpiry)
-                {
-                    SoloBuffLogic.UpdateSoloBuffs();
-                    ScheduleNextExpiry();
-                }
+                SoloBuffLogic.UpdateSoloBuffs();
+                ScheduleNextExpiry();
+                _nextPeriodicScan = now + PeriodicScanInterval;
+                return;
+            }
+
+            // Safety-net periodic scan (catches clan changes if ClanEventPatches misses them)
+            if (now >= _nextPeriodicScan)
+            {
+                _nextPeriodicScan = now + PeriodicScanInterval;
+                SoloBuffLogic.UpdateSoloBuffs();
+                ScheduleNextExpiry();
             }
         }
         catch (Exception ex)

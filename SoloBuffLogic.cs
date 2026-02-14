@@ -254,13 +254,17 @@ namespace SoloTweaker
 
             if (isSolo)
             {
+                bool wasBuffed = _buffedCharacters.Contains(character);
                 BuffService.ApplyBuff(userEntity, character);
                 _buffedCharacters.Add(character);
+                if (!wasBuffed)
+                    NotifyPlayer(em, userEntity, "<color=green>[SoloTweaker] Solo buff APPLIED.</color>");
             }
             else if (_buffedCharacters.Contains(character) || BuffService.HasBuff(character))
             {
                 BuffService.RemoveBuff(character);
                 _buffedCharacters.Remove(character);
+                NotifyPlayer(em, userEntity, "<color=red>[SoloTweaker] Solo buff REMOVED.</color>");
             }
         }
 
@@ -606,6 +610,21 @@ namespace SoloTweaker
             _clanMemberDepartureTimes.Clear();
             _snapshotAll.Clear();
             _clanMap.Clear();
+        }
+
+        static void NotifyPlayer(EntityManager em, Entity userEntity, string message)
+        {
+            try
+            {
+                if (!em.Exists(userEntity) || !em.HasComponent<User>(userEntity))
+                    return;
+                var user = em.GetComponentData<User>(userEntity);
+                if (!user.IsConnected)
+                    return;
+                var msg = new Unity.Collections.FixedString512Bytes(message);
+                ServerChatUtils.SendSystemMessageToClient(em, user, ref msg);
+            }
+            catch { }
         }
 
         static void CleanupStaleEntities(EntityManager em)
