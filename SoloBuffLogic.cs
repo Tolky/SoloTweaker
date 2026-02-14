@@ -183,6 +183,9 @@ namespace SoloTweaker
                 UpdateBuffForUser(em, snap.UserEntity, snap.User, snap.ClanEntity);
             }
 
+            // Remove expired timers (after buff updates, so IsUserSolo stays pure)
+            PurgeExpiredTimers();
+
             // Clean up stale entities
             CleanupStaleEntities(em);
         }
@@ -441,12 +444,8 @@ namespace SoloTweaker
                 {
                     var thresholdMinutes = ClanOfflineThresholdMinutes;
                     if (thresholdMinutes < 0) thresholdMinutes = 0;
-                    var timeSinceLeave = DateTime.UtcNow - leaveTime;
-
-                    if (timeSinceLeave < TimeSpan.FromMinutes(thresholdMinutes))
+                    if (DateTime.UtcNow - leaveTime < TimeSpan.FromMinutes(thresholdMinutes))
                         return false;
-
-                    _userClanLeaveTimes.Remove(userEntity);
                 }
                 return true;
             }
@@ -461,7 +460,6 @@ namespace SoloTweaker
             {
                 if (nowUtc - clanDepartureTime < offlineThreshold)
                     return false;
-                _clanMemberDepartureTimes.Remove(clanEntity);
             }
 
             // Use pre-built clan map instead of re-querying
@@ -498,6 +496,30 @@ namespace SoloTweaker
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Remove expired timers. Called after UpdateSoloBuffs to avoid
+        /// IsUserSolo having side effects.
+        /// </summary>
+        static void PurgeExpiredTimers()
+        {
+            var minutes = ClanOfflineThresholdMinutes;
+            if (minutes < 0) minutes = 0;
+            TimeSpan threshold = TimeSpan.FromMinutes(minutes);
+            DateTime nowUtc = DateTime.UtcNow;
+
+            _staleKeys.Clear();
+            foreach (var kvp in _userClanLeaveTimes)
+                if (nowUtc - kvp.Value >= threshold) _staleKeys.Add(kvp.Key);
+            foreach (var key in _staleKeys)
+                _userClanLeaveTimes.Remove(key);
+
+            _staleKeys.Clear();
+            foreach (var kvp in _clanMemberDepartureTimes)
+                if (nowUtc - kvp.Value >= threshold) _staleKeys.Add(kvp.Key);
+            foreach (var key in _staleKeys)
+                _clanMemberDepartureTimes.Remove(key);
         }
 
         internal struct StatusData
