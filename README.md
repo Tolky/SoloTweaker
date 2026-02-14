@@ -2,37 +2,78 @@
 
 A V Rising server mod that provides stat buffs to solo players, helping balance the game for those playing alone or when clan members are offline.
 
+> **Fork info**: This is a rewrite of [Chimll/SoloTweaker](https://github.com/Chimll/SoloTweaker) with a new buff engine, event-driven architecture, and hot reload support.
+
 ## Features
 
-- **Automatic Solo Detection** - Buffs are applied and removed automatically based on your clan status
-- **Configurable Stat Boosts** - Customize every buff value to fit your server's balance
-- **Clan Offline Threshold** - Optional timer before buffs activate when clan members go offline
-- **Anti-Exploit Protection** - Prevents players from leaving/rejoining clans to bypass timers
-- **Equipment-Aware** - Buffs properly adjust when you swap weapons or gear
+- **Native Buff System** — Uses V Rising's `ModifyUnitStatBuff_DOTS` pipeline instead of direct stat manipulation. Buffs survive gear swaps, death, and are properly recalculated by the game engine.
+- **Event-Driven Detection** — HookDOTS hooks on `ServerBootstrapSystem` and `ClanSystem_Server` react to connect/disconnect/clan changes instantly, with a 10s safety-net scan as fallback. No per-frame polling.
+- **Configurable Stats** — 15 stat types, each with a value and modification type (Multiply or flat Add).
+- **Clan Offline Threshold** — Configurable timer (default 30min) before buffs activate when clan members go offline.
+- **Anti-Exploit Protection** — Leaving a clan applies a cooldown. Timers survive server reboots using `TimeLastConnected`. Players already solo keep their buff when leaving a clan.
+- **Chat Notifications** — Players receive messages when buffs are applied, removed, or when a timer is pending.
+- **Bloodpebble Hot Reload** — Full `Unload()` support: buffs cleared, state reset, hooks disposed, commands unregistered.
+- **Opt-Out System** — Players can toggle buffs on/off per-character with `.solo t`.
 
 ## Stat Buffs
 
 When playing solo, players receive the following buffs (all configurable):
 
-| Stat | Default | Description |
-|------|---------|-------------|
-| Physical Damage | +10% | Increases weapon and physical ability damage |
-| Spell Damage | +10% | Increases magic ability damage |
-| Attack Speed | +10% | Faster attacks and ability casts |
-| Max Health | +10% | Increases maximum HP |
-| Movement Speed | +10% | Faster walking/running speed |
-| Critical Chance | +10% | Multiplicative increase to crit chance |
-| Critical Damage | +10% | Multiplicative increase to crit damage |
-| Physical Lifesteal | +10% | Life gained from physical damage |
-| Spell Lifesteal | +10% | Life gained from spell damage |
-| Resource Yield | +10% | More resources from gathering |
+| Stat | Default | Type | Description |
+|------|---------|------|-------------|
+| Physical Damage | +10% | Multiply | Weapon and physical ability damage |
+| Spell Damage | +10% | Multiply | Magic ability damage |
+| Attack Speed | +10% | Multiply | Primary and ability attack speed |
+| Max Health | +10% | Multiply | Maximum HP |
+| Movement Speed | +10% | Multiply | Walking/running speed |
+| Critical Chance | +10% | Multiply | Physical and spell crit chance |
+| Critical Damage | +10% | Multiply | Physical and spell crit damage |
+| Physical Lifesteal | +10% | Add | Life gained from physical damage |
+| Spell Lifesteal | +10% | Add | Life gained from spell damage |
+| Physical Resistance | +10% | Add | Physical damage reduction |
+| Spell Resistance | +10% | Add | Spell damage reduction |
+| Resource Yield | +10% | Multiply | Resources from gathering |
+
+Each stat can be set to **Multiply** (scales with gear, `0.10` = +10%) or **Add** (flat value). Set any stat to `0` to disable it.
 
 ## Installation
 
-1. Install [BepInEx](https://github.com/BepInEx/BepInEx) for V Rising
-2. Download `SoloTweaker.dll`
-3. Place it in your `BepInEx/plugins` folder
-4. Start the server to generate the config file
+1. Install [BepInEx](https://github.com/BepInEx/BepInEx) IL2CPP for V Rising
+2. Install [VampireCommandFramework](https://github.com/decaprime/VampireCommandFramework)
+3. Install [HookDOTS](https://github.com/iZastic/HookDOTS)
+4. Download `SoloTweaker.dll` and place it in `BepInEx/plugins/`
+5. Start the server — config file is generated at `BepInEx/config/SoloTweaker.cfg`
+
+## Commands
+
+| Command | Shortcut | Admin | Description |
+|---------|----------|-------|-------------|
+| `.solo` | | No | Show mod info and available commands |
+| `.solo status` | | No | Show your solo/buff status (enabled, eligible, active, timer) |
+| `.solo eligible` | `.solo e` | No | Diagnostic: show why you are or aren't eligible |
+| `.solo toggle` | `.solo t` | No | Toggle solo buffs on/off for yourself |
+| `.solo reload` | | Yes | Reload config from disk (no restart needed) |
+| `.solo scan` | | Yes | Force rescan all players |
+| `.solo debug` | | Yes | Show native buff entity and stat modifiers |
+
+### Status Output
+
+```
+[SoloTweaker] Status
+Clan : 3 total, 1 online
+SoloTweaker enabled | Eligible : NO | Buff : INACTIVE
+Timer before application of buff : 12m 30s
+```
+
+### Eligible Output
+
+```
+[SoloTweaker] Eligibility: NOT ELIGIBLE
+[BLOCKING] A member recently left this clan — cooldown 12m 30s remaining.
+Clan has 3 member(s) in snapshot.
+[BLOCKING] PlayerTwo disconnected 17m 30s ago — 12m 30s left.
+[OK] PlayerThree offline 2h 15m (threshold passed).
+```
 
 ## Configuration
 
@@ -40,130 +81,69 @@ After first run, edit `BepInEx/config/SoloTweaker.cfg`:
 
 ```ini
 [1. Combat Stats]
-# Physical damage bonus (0.10 = +10%)
-SoloDamagePercent = 0.1
+# Multiply: 0.10 = +10%. Add: flat value. Set to 0 to disable.
+AttackSpeedValue = 0.1
+AttackSpeedType = 0           # 0 = Multiply, 1 = Add
 
-# Spell damage bonus (0.10 = +10%)
-SoloSpellDamagePercent = 0.1
+PhysicalDamageValue = 0.1
+PhysicalDamageType = 0
 
-# Attack speed bonus (0.10 = +10%)
-SoloAttackSpeedPercent = 0.1
+SpellDamageValue = 0.1
+SpellDamageType = 0
 
-# Physical crit chance bonus - multiplicative (0.10 = 10% increase, so 50% base becomes 55%)
-SoloCritChancePercent = 0.1
+CritChanceValue = 0.1
+CritChanceType = 0
 
-# Physical crit damage bonus - multiplicative (0.10 = 10% increase)
-SoloCritDamagePercent = 0.1
+CritDamageValue = 0.1
+CritDamageType = 0
 
 [2. Survivability]
-# Max health bonus (0.10 = +10%)
-SoloHealthPercent = 0.1
+HealthValue = 0.1
+HealthType = 0
 
-# Physical lifesteal bonus (0.10 = +10% lifesteal)
-SoloPhysicalLeechPercent = 0.1
+PhysicalLeechValue = 0.1
+PhysicalLeechType = 1         # Add (flat lifesteal)
 
-# Spell lifesteal bonus (0.10 = +10% lifesteal)
-SoloSpellLeechPercent = 0.1
+SpellLeechValue = 0.1
+SpellLeechType = 1
+
+PhysicalResistanceValue = 0.1
+PhysicalResistanceType = 1    # Add (flat resistance)
+
+SpellResistanceValue = 0.1
+SpellResistanceType = 1
 
 [3. Mobility & Utility]
-# Movement speed bonus (0.10 = +10%)
-SoloMoveSpeedPercent = 0.1
+MoveSpeedValue = 0.1
+MoveSpeedType = 0
 
-# Resource yield bonus (0.10 = +10%)
-SoloResourceYieldPercent = 0.1
+ResourceYieldValue = 0.1
+ResourceYieldType = 0
 
 [4. Clan Settings]
-# Minutes a clan member must be offline before solo buffs activate (0 = instant)
-SoloClanOfflineThresholdMinutes = 0
+# Minutes clan members must be offline before solo buffs activate (0 = instant)
+ClanOfflineThresholdMinutes = 30
 ```
 
-### Clan Offline Threshold
-
-The `SoloClanOfflineThresholdMinutes` setting controls how long clan members must be offline before you're considered "solo":
-
-- **0** (default): Instant - buffs activate immediately when you're the only online clan member
-- **30**: Buffs activate 30 minutes after the last clan member goes offline
-- **60**: Buffs activate 1 hour after the last clan member goes offline
-
-This prevents abuse where players could have clan members log off temporarily to gain buffs during raids or boss fights.
-
-The timer also applies when:
-- A clan member disconnects from the server
-- A clan member leaves the clan
-- You leave a clan (you must wait before getting solo buffs)
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `.solo` | Check your current solo status and buff state |
-| `.solooff` | Disable solo buffs for yourself |
-| `.soloon` | Re-enable solo buffs for yourself |
-
-### Example Output
-
-```
-.solo
-> SOLO, BUFF
-> You are not in a clan.
-> SoloTweaker buff is ACTIVE.
-```
-
-```
-.solo
-> NOT SOLO, NO BUFF
-> Clan members: 2 total, 2 online.
-> Another clan member is currently online; solo buff in clan is unavailable.
-> SoloTweaker buff is NOT ACTIVE.
-```
-
-```
-.solo
-> NOT SOLO, NO BUFF
-> Clan members: 2 total, 1 online.
-> Solo buff in clan will become available in 25m 30s (if no clanmates log in).
-> SoloTweaker buff is NOT ACTIVE.
-```
+Use `.solo reload` to apply config changes without restarting the server.
 
 ## How It Works
 
-1. **Solo Detection**: The mod checks every frame if you qualify as "solo":
-   - No clan: You're solo (unless you recently left one)
-   - In a clan: Solo only if all other members are offline past the threshold
+1. **Solo Detection** — An O(n) snapshot builds a clan map each scan. For each user, eligibility is checked against clan members' online status and disconnect times.
 
-2. **Buff Application**: When solo, stat multipliers are applied to your current equipment stats. When you swap gear, buffs automatically adjust to the new base values.
+2. **Buff Application** — A lightweight carrier buff (`ModifyUnitStatBuff_DOTS`) is applied via V Rising's `DebugEventsSystem`. The game engine handles stat recalculation naturally.
 
-3. **Buff Removal**: When a clan member comes online or you join a clan, buffs are immediately removed.
+3. **Event-Driven Scanning** — HookDOTS postfix hooks detect connect/disconnect events and clan changes. A precise timer fires exactly when the next offline threshold expires.
 
-4. **Anti-Exploit**:
-   - Leaving a clan starts a timer (same as offline threshold)
-   - Remaining clan members also get a timer when someone leaves
-   - Prevents instant buff abuse through clan manipulation
+4. **Anti-Exploit** — Leaving a clan starts a cooldown (same as offline threshold). If you were already solo in the clan, no cooldown is applied. Timers use `TimeLastConnected` to survive server reboots.
 
-## Compatibility
+## Dependencies
 
-- **V Rising**: Gloomrot update and later
-- **BepInEx**: IL2CPP version for V Rising
-- **Server-side only**: No client mod required
+- [BepInEx 6](https://github.com/BepInEx/BepInEx) (IL2CPP)
+- [VampireCommandFramework](https://github.com/decaprime/VampireCommandFramework)
+- [HookDOTS](https://github.com/iZastic/HookDOTS)
+- [Bloodpebble](https://thunderstore.io/c/v-rising/p/cheesasaurus/Bloodpebble/) (optional, for hot reload)
 
-## Troubleshooting
-
-**Buffs not applying?**
-- Check `.solo` to see your status
-- Verify you haven't used `.solooff`
-- If in a clan, check the offline threshold timer
-
-**Stats seem wrong after equipment swap?**
-- Buffs automatically adjust each frame
-- If issues persist, use `.solooff` then `.soloon` to reset
-
-**Config changes not working?**
-- Restart the server after editing config
-- Check BepInEx logs for errors
-
-## Credits
-
-Special thanks to the hellsing community for testing the mod to make sure it works smoothly, further thanks goes to Odjit for the guidance and help with the mod.
 ## License
 
-MIT License - Feel free to modify and redistribute.
+MIT License — Feel free to modify and redistribute.
