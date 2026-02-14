@@ -56,6 +56,23 @@ internal static class BuffService
         return BuffUtility.TryGetBuff(world.EntityManager, character, CarrierBuff, out _);
     }
 
+    /// <summary>
+    /// Re-configure and re-populate stats on an existing buff.
+    /// Called after reboot when a persisted buff may have lost its custom stat buffer.
+    /// </summary>
+    public static void RefreshBuff(Entity character)
+    {
+        var world = SoloBuffLogic.GetServerWorld();
+        if (world == null || !world.IsCreated) return;
+
+        var em = world.EntityManager;
+        if (!BuffUtility.TryGetBuff(em, character, CarrierBuff, out Entity buffEntity))
+            return;
+
+        ConfigurePermanentBuff(buffEntity);
+        PopulateStatBuffer(buffEntity);
+    }
+
     internal static void ConfigurePermanentBuff(Entity buffEntity)
     {
         // Remove gameplay event triggers (prevent buff from self-removing)

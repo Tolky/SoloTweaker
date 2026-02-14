@@ -270,6 +270,14 @@ namespace SoloTweaker
                     _buffedCharacters.Add(character);
                     NotifyPlayer(em, userEntity, "<color=green>[SoloTweaker] Solo buffs applied.</color>");
                 }
+                else if (!_buffedCharacters.Contains(character))
+                {
+                    // Buff exists but not in our tracking set (e.g., survived a reboot).
+                    // Re-configure and re-populate stats — the game may have restored
+                    // the prefab's default stat modifiers during deserialization.
+                    BuffService.RefreshBuff(character);
+                    _buffedCharacters.Add(character);
+                }
                 _timerNotified.Remove(userEntity);
             }
             else if (hasBuff)
