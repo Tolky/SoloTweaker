@@ -8,8 +8,8 @@ namespace SoloTweaker;
 
 internal static class BuffService
 {
-    // Buff_General_Build_Spawn_Buff_WeakStructure_Wall — lightweight carrier buff
-    static readonly PrefabGUID CarrierBuff = new(740689171);
+    // SetBonus_AllLeech_T09 — set bonus buff used as stat carrier (no visual effects, no building components)
+    static readonly PrefabGUID CarrierBuff = new(1774716596);
 
     public static bool ApplyBuff(Entity user, Entity character)
     {

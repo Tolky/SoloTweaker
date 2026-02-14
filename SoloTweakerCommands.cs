@@ -27,7 +27,7 @@ namespace SoloTweaker
     [CommandGroup("solo")]
     internal static class SoloCommands
     {
-        static readonly PrefabGUID CarrierBuff = new(740689171);
+        static readonly PrefabGUID CarrierBuff = new(1774716596);
 
         [Command("status", description: "Show your current solo/buff status.")]
         public static void Status(ChatCommandContext ctx)
