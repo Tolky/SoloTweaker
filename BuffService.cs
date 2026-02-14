@@ -58,6 +58,7 @@ internal static class BuffService
 
     internal static void ConfigurePermanentBuff(Entity buffEntity)
     {
+        // Remove gameplay event triggers (prevent buff from self-removing)
         if (buffEntity.Has<CreateGameplayEventsOnSpawn>())
             buffEntity.Remove<CreateGameplayEventsOnSpawn>();
         if (buffEntity.Has<GameplayEventListeners>())

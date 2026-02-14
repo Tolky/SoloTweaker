@@ -257,7 +257,7 @@ namespace SoloTweaker
                 BuffService.ApplyBuff(userEntity, character);
                 _buffedCharacters.Add(character);
             }
-            else if (_buffedCharacters.Contains(character))
+            else if (_buffedCharacters.Contains(character) || BuffService.HasBuff(character))
             {
                 BuffService.RemoveBuff(character);
                 _buffedCharacters.Remove(character);
