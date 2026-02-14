@@ -20,7 +20,7 @@ namespace SoloTweaker
                 $"<color=#ffcc00>[SoloTweaker]</color> v{Plugin.PluginVersion}\n" +
                 "Automatic stat buffs for solo players.\n" +
                 $"Activation: <color=green>automatic</color> when you are the only online clan member ({thresholdStr}).\n" +
-                "Commands: <color=white>.solo status</color> | <color=white>.solo t</color> | <color=white>.solo reload</color> | <color=white>.solo debug</color>");
+                "Commands: <color=white>.solo status</color> | <color=white>.solo e</color> | <color=white>.solo t</color> | <color=white>.solo reload</color> | <color=white>.solo debug</color>");
         }
     }
 
@@ -64,6 +64,34 @@ namespace SoloTweaker
 
             if (data.TimerRemaining != null)
                 msg += $"\nTimer before application of buff : {FormatMinutes(data.TimerRemaining.Value)}";
+
+            ctx.Reply(msg);
+        }
+
+        [Command("eligible", "e", null, "Show why you are or aren't eligible for solo buffs.")]
+        public static void Eligible(ChatCommandContext ctx)
+        {
+            var serverWorld = SoloBuffLogic.GetServerWorld();
+            if (serverWorld == null || !serverWorld.IsCreated)
+            {
+                ctx.Reply("[SoloTweaker] Server world not ready yet.");
+                return;
+            }
+
+            EntityManager em = serverWorld.EntityManager;
+            var reasons = SoloBuffLogic.GetEligibilityReasons(em, ctx.Event.SenderUserEntity);
+
+            bool hasBlocking = false;
+            foreach (var r in reasons)
+                if (r.Contains("[BLOCKING]")) { hasBlocking = true; break; }
+
+            string header = hasBlocking
+                ? "<color=#ffcc00>[SoloTweaker]</color> Eligibility: <color=red>NOT ELIGIBLE</color>"
+                : "<color=#ffcc00>[SoloTweaker]</color> Eligibility: <color=green>ELIGIBLE</color>";
+
+            string msg = header;
+            foreach (var r in reasons)
+                msg += "\n" + r;
 
             ctx.Reply(msg);
         }

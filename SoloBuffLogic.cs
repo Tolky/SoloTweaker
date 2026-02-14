@@ -297,6 +297,125 @@ namespace SoloTweaker
         }
 
         /// <summary>
+        /// Diagnostic: returns a list of reasons why the user is NOT eligible.
+        /// Empty list = eligible.
+        /// </summary>
+        internal static List<string> GetEligibilityReasons(EntityManager em, Entity userEntity)
+        {
+            var reasons = new List<string>();
+
+            if (!em.Exists(userEntity) || !em.HasComponent<User>(userEntity))
+            {
+                reasons.Add("User entity invalid.");
+                return reasons;
+            }
+
+            var user = em.GetComponentData<User>(userEntity);
+            var clanEntity = user.ClanEntity._Entity;
+            if (clanEntity != Entity.Null && !em.Exists(clanEntity))
+                clanEntity = Entity.Null;
+
+            if (_snapshotAll.Count == 0)
+                BuildSnapshot(em);
+
+            var minutes = ClanOfflineThresholdMinutes;
+            if (minutes < 0) minutes = 0;
+            TimeSpan offlineThreshold = TimeSpan.FromMinutes(minutes);
+            DateTime nowUtc = DateTime.UtcNow;
+
+            if (clanEntity == Entity.Null)
+            {
+                if (_userClanLeaveTimes.TryGetValue(userEntity, out DateTime leaveTime))
+                {
+                    var elapsed = nowUtc - leaveTime;
+                    if (elapsed < offlineThreshold)
+                    {
+                        var remaining = offlineThreshold - elapsed;
+                        reasons.Add($"<color=red>[BLOCKING]</color> Recently left clan — cooldown {FormatTimeSpanShort(remaining)} remaining.");
+                    }
+                }
+
+                if (reasons.Count == 0)
+                    reasons.Add("No clan — you are eligible.");
+                return reasons;
+            }
+
+            // Clan departure timer
+            if (_clanMemberDepartureTimes.TryGetValue(clanEntity, out DateTime clanDepartureTime))
+            {
+                var elapsed = nowUtc - clanDepartureTime;
+                if (elapsed < offlineThreshold)
+                {
+                    var remaining = offlineThreshold - elapsed;
+                    reasons.Add($"<color=red>[BLOCKING]</color> A member recently left this clan — cooldown {FormatTimeSpanShort(remaining)} remaining.");
+                }
+            }
+
+            if (!_clanMap.TryGetValue(clanEntity, out var clanMembers))
+            {
+                reasons.Add("Clan map empty (no members found in snapshot).");
+                return reasons;
+            }
+
+            reasons.Add($"Clan has {clanMembers.Count} member(s) in snapshot.");
+
+            for (int i = 0; i < clanMembers.Count; i++)
+            {
+                var member = clanMembers[i];
+                if (member.UserEntity == userEntity)
+                    continue;
+
+                string memberName = member.User.CharacterName.ToString();
+
+                if (member.User.IsConnected)
+                {
+                    reasons.Add($"<color=red>[BLOCKING]</color> {memberName} is ONLINE.");
+                    continue;
+                }
+
+                if (_userDisconnectTimes.TryGetValue(member.UserEntity, out DateTime disconnectTime))
+                {
+                    var elapsed = nowUtc - disconnectTime;
+                    if (elapsed < offlineThreshold)
+                    {
+                        var remaining = offlineThreshold - elapsed;
+                        reasons.Add($"<color=red>[BLOCKING]</color> {memberName} disconnected {FormatTimeSpanShort(elapsed)} ago — {FormatTimeSpanShort(remaining)} left.");
+                    }
+                    else
+                    {
+                        reasons.Add($"<color=green>[OK]</color> {memberName} offline {FormatTimeSpanShort(elapsed)} (threshold passed).");
+                    }
+                }
+                else
+                {
+                    DateTime lastOnlineUtc;
+                    try { lastOnlineUtc = DateTime.FromBinary(member.User.TimeLastConnected).ToUniversalTime(); }
+                    catch { lastOnlineUtc = DateTime.MinValue; }
+
+                    if (lastOnlineUtc == DateTime.MinValue)
+                    {
+                        reasons.Add($"<color=red>[BLOCKING]</color> {memberName} has unknown last connect time — treated as recent.");
+                    }
+                    else
+                    {
+                        var elapsed = nowUtc - lastOnlineUtc;
+                        if (elapsed < offlineThreshold)
+                        {
+                            var remaining = offlineThreshold - elapsed;
+                            reasons.Add($"<color=red>[BLOCKING]</color> {memberName} last seen {FormatTimeSpanShort(elapsed)} ago — {FormatTimeSpanShort(remaining)} left.");
+                        }
+                        else
+                        {
+                            reasons.Add($"<color=green>[OK]</color> {memberName} last seen {FormatTimeSpanShort(elapsed)} ago (threshold passed).");
+                        }
+                    }
+                }
+            }
+
+            return reasons;
+        }
+
+        /// <summary>
         /// Determine if user qualifies as solo. Uses pre-built _clanMap — O(clan_size) not O(n).
         /// </summary>
         static bool IsUserSolo(Entity userEntity, User user, Entity clanEntity)
