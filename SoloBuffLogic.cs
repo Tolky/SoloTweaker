@@ -754,6 +754,7 @@ namespace SoloTweaker
             _timerNotified.Clear();
             _snapshotAll.Clear();
             _clanMap.Clear();
+            _pendingRefresh = false;
         }
 
         static void NotifyTimerIfNeeded(EntityManager em, Entity userEntity, Entity clanEntity)
