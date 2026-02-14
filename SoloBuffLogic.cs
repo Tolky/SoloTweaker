@@ -26,6 +26,9 @@ namespace SoloTweaker
         // Track when someone left a specific clan (clan entity -> departure time)
         private static readonly Dictionary<Entity, DateTime> _clanMemberDepartureTimes = new();
 
+        // Track which users have been notified about a pending timer (avoid spam)
+        private static readonly HashSet<Entity> _timerNotified = new();
+
         /// <summary>
         /// True when offline-threshold timers are pending (disconnect or clan leave).
         /// Used by EventPatches to skip periodic scans when no timers are active.
@@ -251,20 +254,29 @@ namespace SoloTweaker
                 return;
 
             bool isSolo = IsUserSolo(userEntity, user, clanEntity);
+            bool wasBuff = _buffedCharacters.Contains(character) || BuffService.HasBuff(character);
 
             if (isSolo)
             {
-                bool wasBuffed = _buffedCharacters.Contains(character);
                 BuffService.ApplyBuff(userEntity, character);
                 _buffedCharacters.Add(character);
-                if (!wasBuffed)
-                    NotifyPlayer(em, userEntity, "<color=green>[SoloTweaker] Solo buff APPLIED.</color>");
+                _timerNotified.Remove(userEntity);
+                if (!wasBuff)
+                    NotifyPlayer(em, userEntity, "<color=green>[SoloTweaker] Solo buff activated.</color>");
             }
-            else if (_buffedCharacters.Contains(character) || BuffService.HasBuff(character))
+            else if (wasBuff)
             {
                 BuffService.RemoveBuff(character);
                 _buffedCharacters.Remove(character);
-                NotifyPlayer(em, userEntity, "<color=red>[SoloTweaker] Solo buff REMOVED.</color>");
+                NotifyPlayer(em, userEntity, "<color=red>[SoloTweaker] You are no longer solo, buff removed.</color>");
+
+                // If there's a cooldown timer, notify about it
+                NotifyTimerIfNeeded(em, userEntity, clanEntity);
+            }
+            else
+            {
+                // Not solo, no buff — check if we should notify about a pending timer
+                NotifyTimerIfNeeded(em, userEntity, clanEntity);
             }
         }
 
@@ -608,8 +620,38 @@ namespace SoloTweaker
             _userClanLeaveTimes.Clear();
             _userLastClan.Clear();
             _clanMemberDepartureTimes.Clear();
+            _timerNotified.Clear();
             _snapshotAll.Clear();
             _clanMap.Clear();
+        }
+
+        static void NotifyTimerIfNeeded(EntityManager em, Entity userEntity, Entity clanEntity)
+        {
+            if (_timerNotified.Contains(userEntity))
+                return;
+
+            var remaining = clanEntity != Entity.Null
+                ? GetClanSoloCooldownRemaining(userEntity, clanEntity)
+                : null;
+
+            // Also check clan-leave timer for players with no clan
+            if (remaining == null && _userClanLeaveTimes.TryGetValue(userEntity, out DateTime leaveTime))
+            {
+                var mins = ClanOfflineThresholdMinutes;
+                if (mins > 0)
+                {
+                    var left = TimeSpan.FromMinutes(mins) - (DateTime.UtcNow - leaveTime);
+                    if (left > TimeSpan.Zero)
+                        remaining = left;
+                }
+            }
+
+            if (remaining != null && remaining.Value > TimeSpan.Zero)
+            {
+                _timerNotified.Add(userEntity);
+                NotifyPlayer(em, userEntity,
+                    $"<color=yellow>[SoloTweaker] Solo buff available in {FormatTimeSpanShort(remaining.Value)}.</color>");
+            }
         }
 
         static void NotifyPlayer(EntityManager em, Entity userEntity, string message)
