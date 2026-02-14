@@ -189,13 +189,19 @@ namespace SoloTweaker
 
         static void TrackUserState(EntityManager em, Entity userEntity, User user, Entity currentClan)
         {
-            // Track disconnect times (actual network disconnects)
+            // Track disconnect times
             if (!user.IsConnected && !_userDisconnectTimes.ContainsKey(userEntity))
             {
-                _userDisconnectTimes[userEntity] = DateTime.UtcNow;
+                // Use TimeLastConnected for players already offline (e.g. after server reboot)
+                // instead of DateTime.UtcNow which would reset the timer
+                DateTime disconnectTime;
+                try { disconnectTime = DateTime.FromBinary(user.TimeLastConnected).ToUniversalTime(); }
+                catch { disconnectTime = DateTime.UtcNow; }
 
-                if (currentClan != Entity.Null)
-                    _clanMemberDepartureTimes[currentClan] = DateTime.UtcNow;
+                if (disconnectTime == DateTime.MinValue || disconnectTime > DateTime.UtcNow)
+                    disconnectTime = DateTime.UtcNow;
+
+                _userDisconnectTimes[userEntity] = disconnectTime;
             }
             else if (user.IsConnected && _userDisconnectTimes.ContainsKey(userEntity))
             {
