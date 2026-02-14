@@ -209,15 +209,23 @@ namespace SoloTweaker
                     _userDisconnectTimes.Remove(userEntity);
             }
 
-            // Track clan changes (to prevent leave/rejoin exploit)
+            // Track clan changes (kick/leave/join)
             if (user.IsConnected)
             {
                 if (_userLastClan.TryGetValue(userEntity, out Entity lastClan))
                 {
                     if (lastClan != Entity.Null && em.Exists(lastClan) && currentClan == Entity.Null)
                     {
-                        _userClanLeaveTimes[userEntity] = DateTime.UtcNow;
-                        _userDisconnectTimes[userEntity] = DateTime.UtcNow;
+                        // Only apply cooldown if user wasn't already solo (had no buff)
+                        var charEntity = user.LocalCharacter._Entity;
+                        bool wasSolo = charEntity != Entity.Null && _buffedCharacters.Contains(charEntity);
+
+                        if (!wasSolo)
+                        {
+                            _userClanLeaveTimes[userEntity] = DateTime.UtcNow;
+                        }
+
+                        // Remaining clan members still get departure cooldown
                         _clanMemberDepartureTimes[lastClan] = DateTime.UtcNow;
                     }
                     else if (currentClan != Entity.Null && currentClan != lastClan)
