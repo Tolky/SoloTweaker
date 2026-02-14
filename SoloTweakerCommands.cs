@@ -16,11 +16,16 @@ namespace SoloTweaker
             var threshold = Plugin.SoloClanOfflineThresholdMinutes.Value;
             string thresholdStr = threshold <= 0 ? "instant" : $"{threshold}min after last clanmate logs off";
 
-            ctx.Reply(
+            string msg =
                 $"<color=#ffcc00>[SoloTweaker]</color> v{Plugin.PluginVersion}\n" +
                 "Automatic stat buffs for solo players.\n" +
                 $"Activation: <color=green>automatic</color> when you are the only online clan member ({thresholdStr}).\n" +
-                "Commands: <color=white>.solo status</color> | <color=white>.solo e</color> | <color=white>.solo t</color> | <color=white>.solo reload</color> | <color=white>.solo debug</color>");
+                "Commands: <color=white>.solo status</color> | <color=white>.solo e</color> | <color=white>.solo t</color>";
+
+            if (ctx.Event.User.IsAdmin)
+                msg += " | <color=white>.solo reload</color> | <color=white>.solo scan</color> | <color=white>.solo debug</color>";
+
+            ctx.Reply(msg);
         }
     }
 
