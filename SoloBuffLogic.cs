@@ -244,55 +244,43 @@ namespace SoloTweaker
 
         static void UpdateBuffForUser(EntityManager em, Entity userEntity, User user, Entity clanEntity)
         {
-            if (IsUserOptedOut(em, userEntity))
-            {
-                var charEntity = user.LocalCharacter._Entity;
-                if (charEntity != Entity.Null && em.Exists(charEntity))
-                {
-                    BuffService.RemoveBuff(charEntity);
-                    _buffedCharacters.Remove(charEntity);
-                }
-                return;
-            }
-
-            if (!user.IsConnected)
-            {
-                var charEntity = user.LocalCharacter._Entity;
-                if (charEntity != Entity.Null && em.Exists(charEntity))
-                {
-                    BuffService.RemoveBuff(charEntity);
-                    _buffedCharacters.Remove(charEntity);
-                }
-                return;
-            }
-
             var character = user.LocalCharacter._Entity;
             if (character == Entity.Null || !em.Exists(character))
                 return;
 
+            bool hasBuff = _buffedCharacters.Contains(character) || BuffService.HasBuff(character);
+
+            if (IsUserOptedOut(em, userEntity) || !user.IsConnected)
+            {
+                if (hasBuff)
+                {
+                    BuffService.RemoveBuff(character);
+                    _buffedCharacters.Remove(character);
+                }
+                return;
+            }
+
             bool isSolo = IsUserSolo(userEntity, user, clanEntity);
-            bool wasBuff = _buffedCharacters.Contains(character) || BuffService.HasBuff(character);
 
             if (isSolo)
             {
-                BuffService.ApplyBuff(userEntity, character);
-                _buffedCharacters.Add(character);
-                _timerNotified.Remove(userEntity);
-                if (!wasBuff)
+                if (!hasBuff)
+                {
+                    BuffService.ApplyBuff(userEntity, character);
+                    _buffedCharacters.Add(character);
                     NotifyPlayer(em, userEntity, "<color=green>[SoloTweaker] Solo buffs applied.</color>");
+                }
+                _timerNotified.Remove(userEntity);
             }
-            else if (wasBuff)
+            else if (hasBuff)
             {
                 BuffService.RemoveBuff(character);
                 _buffedCharacters.Remove(character);
                 NotifyPlayer(em, userEntity, "<color=red>[SoloTweaker] Solo buffs removed.</color>");
-
-                // If there's a cooldown timer, notify about it
                 NotifyTimerIfNeeded(em, userEntity, clanEntity);
             }
             else
             {
-                // Not solo, no buff — check if we should notify about a pending timer
                 NotifyTimerIfNeeded(em, userEntity, clanEntity);
             }
         }
