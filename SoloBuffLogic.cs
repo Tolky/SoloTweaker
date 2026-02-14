@@ -367,88 +367,68 @@ namespace SoloTweaker
             return true;
         }
 
-        public static bool TryGetStatusForUser(EntityManager em, Entity userEntity, out bool isSolo, out bool hasSoloBuff, out string info)
+        internal struct StatusData
         {
-            isSolo = false;
-            hasSoloBuff = false;
-            info = string.Empty;
+            public int ClanTotal;
+            public int ClanOnline;
+            public bool IsEnabled;
+            public bool IsEligible;
+            public bool IsBuffActive;
+            public TimeSpan? TimerRemaining;
+        }
+
+        internal static bool TryGetStatusData(EntityManager em, Entity userEntity, out StatusData data)
+        {
+            data = default;
 
             if (!em.Exists(userEntity) || !em.HasComponent<User>(userEntity))
-            {
-                info = "User entity missing User component.";
                 return false;
-            }
 
             var user = em.GetComponentData<User>(userEntity);
             var charEntity = user.LocalCharacter._Entity;
-
             if (charEntity == Entity.Null || !em.Exists(charEntity))
-            {
-                info = "No character entity resolved from User.LocalCharacter.";
                 return false;
-            }
 
             var clanEntity = user.ClanEntity._Entity;
             if (clanEntity != Entity.Null && !em.Exists(clanEntity))
                 clanEntity = Entity.Null;
 
-            // Build snapshot if needed (for command-triggered status checks)
             if (_snapshotAll.Count == 0)
                 BuildSnapshot(em);
 
-            isSolo = IsUserSolo(userEntity, user, clanEntity);
-
-            if (clanEntity == Entity.Null)
+            if (clanEntity != Entity.Null)
+                GetClanMemberCounts(clanEntity, out data.ClanTotal, out data.ClanOnline);
+            else
             {
-                info = "You are not in a clan.";
+                data.ClanTotal = 1;
+                data.ClanOnline = user.IsConnected ? 1 : 0;
+            }
 
-                if (_userClanLeaveTimes.TryGetValue(userEntity, out DateTime leaveTime))
+            data.IsEnabled = !IsUserOptedOut(em, userEntity);
+            data.IsEligible = IsUserSolo(userEntity, user, clanEntity);
+            data.IsBuffActive = _buffedCharacters.Contains(charEntity) && BuffService.HasBuff(charEntity);
+
+            // Timer: only relevant when enabled but not yet eligible
+            if (data.IsEnabled && !data.IsEligible)
+            {
+                var remaining = clanEntity != Entity.Null
+                    ? GetClanSoloCooldownRemaining(userEntity, clanEntity)
+                    : null;
+
+                if (remaining == null && _userClanLeaveTimes.TryGetValue(userEntity, out DateTime leaveTime))
                 {
                     var mins = ClanOfflineThresholdMinutes;
-                    if (mins < 0) mins = 0;
-                    var remaining = TimeSpan.FromMinutes(mins) - (DateTime.UtcNow - leaveTime);
-                    if (remaining > TimeSpan.Zero)
-                        info += $"\nYou recently left a clan. Solo buff will become available in {FormatTimeSpanShort(remaining)}.";
+                    if (mins > 0)
+                    {
+                        var left = TimeSpan.FromMinutes(mins) - (DateTime.UtcNow - leaveTime);
+                        if (left > TimeSpan.Zero)
+                            remaining = left;
+                    }
                 }
+
+                if (remaining != null && remaining.Value > TimeSpan.Zero)
+                    data.TimerRemaining = remaining;
             }
-            else
-            {
-                GetClanMemberCounts(clanEntity, out var totalMembers, out var onlineMembers);
-                info = $"Clan members: {totalMembers} total, {onlineMembers} online.";
-
-                var remaining = GetClanSoloCooldownRemaining(userEntity, clanEntity);
-
-                if (!isSolo)
-                {
-                    if (remaining == null)
-                    {
-                        if (onlineMembers > 1)
-                            info += "\nAnother clan member is currently online; solo buff in clan is unavailable.";
-                    }
-                    else if (remaining.Value > TimeSpan.Zero)
-                    {
-                        info += $"\nSolo buff in clan will become available in {FormatTimeSpanShort(remaining.Value)} (if no clanmates log in).";
-                    }
-                    else
-                    {
-                        info += "\nYou are currently eligible for the solo buff while in a clan.";
-                    }
-                }
-                else if (ClanOfflineThresholdMinutes > 0 && totalMembers > 1)
-                {
-                    info += "\nYou are currently eligible for the solo buff while in a clan.";
-                }
-            }
-
-            var optedOut = IsUserOptedOut(em, userEntity);
-            hasSoloBuff = _buffedCharacters.Contains(charEntity) && BuffService.HasBuff(charEntity);
-
-            if (optedOut)
-                info += "\nYou have SoloTweaker buffs DISABLED via .solooff.";
-            else if (hasSoloBuff)
-                info += "\nSoloTweaker buff is ACTIVE.";
-            else
-                info += "\nSoloTweaker buff is NOT ACTIVE.";
 
             return true;
         }
@@ -570,6 +550,23 @@ namespace SoloTweaker
         internal static void SetUserOptIn(EntityManager em, Entity userEntity)
         {
             _optOutUsers.Remove(userEntity);
+        }
+
+        /// <summary>
+        /// Toggle opt-out state. Returns true if now opted OUT (disabled).
+        /// </summary>
+        internal static bool ToggleUserOptOut(EntityManager em, Entity userEntity)
+        {
+            if (_optOutUsers.Contains(userEntity))
+            {
+                SetUserOptIn(em, userEntity);
+                return false;
+            }
+            else
+            {
+                SetUserOptOut(em, userEntity);
+                return true;
+            }
         }
 
         internal static void ClearAllBuffs()

@@ -20,7 +20,7 @@ namespace SoloTweaker
                 $"<color=#ffcc00>[SoloTweaker]</color> v{Plugin.PluginVersion}\n" +
                 "Automatic stat buffs for solo players.\n" +
                 $"Activation: <color=green>automatic</color> when you are the only online clan member ({thresholdStr}).\n" +
-                "Commands: <color=white>.solo status</color> | <color=white>.solo on</color> | <color=white>.solo off</color> | <color=white>.solo reload</color> | <color=white>.solo debug</color>");
+                "Commands: <color=white>.solo status</color> | <color=white>.solo t</color> | <color=white>.solo reload</color> | <color=white>.solo debug</color>");
         }
     }
 
@@ -41,30 +41,35 @@ namespace SoloTweaker
 
             EntityManager em = serverWorld.EntityManager;
 
-            if (!SoloBuffLogic.TryGetStatusForUser(
-                    em,
-                    ctx.Event.SenderUserEntity,
-                    out bool isSolo,
-                    out bool hasSoloBuff,
-                    out string info))
+            if (!SoloBuffLogic.TryGetStatusData(em, ctx.Event.SenderUserEntity, out var data))
             {
                 ctx.Reply("[SoloTweaker] Could not resolve your status.");
                 return;
             }
 
-            string soloStr = isSolo
-                ? "<color=green>SOLO</color>"
-                : "<color=red>NOT SOLO</color>";
-
-            string buffStr = hasSoloBuff
+            string enabledStr = data.IsEnabled
+                ? "<color=green>enabled</color>"
+                : "<color=red>disabled</color>";
+            string eligibleStr = data.IsEligible
+                ? "<color=green>YES</color>"
+                : "<color=red>NO</color>";
+            string buffStr = data.IsBuffActive
                 ? "<color=green>ACTIVE</color>"
                 : "<color=red>INACTIVE</color>";
 
-            ctx.Reply($"[SoloTweaker] {soloStr} | Buff: {buffStr}\n{info}");
+            string msg =
+                "<color=#ffcc00>[SoloTweaker]</color> Status\n" +
+                $"Clan : {data.ClanTotal} total, {data.ClanOnline} online\n" +
+                $"SoloTweaker {enabledStr} | Eligible : {eligibleStr} | Buff : {buffStr}";
+
+            if (data.TimerRemaining != null)
+                msg += $"\nTimer before application of buff : {FormatMinutes(data.TimerRemaining.Value)}";
+
+            ctx.Reply(msg);
         }
 
-        [Command("on", description: "Re-enable solo buffs after opting out.")]
-        public static void On(ChatCommandContext ctx)
+        [Command("toggle", "t", null, "Toggle solo buffs on/off.")]
+        public static void Toggle(ChatCommandContext ctx)
         {
             var serverWorld = SoloBuffLogic.GetServerWorld();
             if (serverWorld == null || !serverWorld.IsCreated)
@@ -75,26 +80,17 @@ namespace SoloTweaker
 
             EntityManager em = serverWorld.EntityManager;
 
-            SoloBuffLogic.SetUserOptIn(em, ctx.Event.SenderUserEntity);
-            SoloBuffLogic.UpdateBuffForUser(em, ctx.Event.SenderUserEntity);
+            bool nowDisabled = SoloBuffLogic.ToggleUserOptOut(em, ctx.Event.SenderUserEntity);
 
-            ctx.Reply("[SoloTweaker] Solo buffs <color=green>ENABLED</color>. Buffs will apply automatically when you are solo.");
-        }
-
-        [Command("off", description: "Opt out of solo buffs.")]
-        public static void Off(ChatCommandContext ctx)
-        {
-            var serverWorld = SoloBuffLogic.GetServerWorld();
-            if (serverWorld == null || !serverWorld.IsCreated)
+            if (nowDisabled)
             {
-                ctx.Reply("[SoloTweaker] Server world not ready yet.");
-                return;
+                ctx.Reply("[SoloTweaker] Solo buffs <color=red>DISABLED</color>. Use <color=white>.solo t</color> to re-enable.");
             }
-
-            EntityManager em = serverWorld.EntityManager;
-
-            SoloBuffLogic.SetUserOptOut(em, ctx.Event.SenderUserEntity);
-            ctx.Reply("[SoloTweaker] Solo buffs <color=red>DISABLED</color>. Use <color=white>.solo on</color> to re-enable.");
+            else
+            {
+                SoloBuffLogic.UpdateBuffForUser(em, ctx.Event.SenderUserEntity);
+                ctx.Reply("[SoloTweaker] Solo buffs <color=green>ENABLED</color>. Buffs will apply automatically when you are solo.");
+            }
         }
 
         [Command("reload", null, null, "Reload SoloTweaker config from disk.", null, true)]
@@ -169,6 +165,14 @@ namespace SoloTweaker
             msg += $"  Move: {Plugin.SoloMoveSpeedPercent.Value}  ResYield: {Plugin.SoloResourceYieldPercent.Value}\n";
 
             ctx.Reply(msg);
+        }
+
+        static string FormatMinutes(TimeSpan ts)
+        {
+            if (ts <= TimeSpan.Zero) return "0s";
+            if (ts.TotalHours >= 1.0) return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+            if (ts.TotalMinutes >= 1.0) return $"{(int)ts.TotalMinutes}m {ts.Seconds}s";
+            return $"{ts.Seconds}s";
         }
     }
 }
